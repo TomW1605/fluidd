@@ -440,7 +440,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return []
   },
 
-  getAllLeds: (_, getters) => (showHidden=false) => {
+  getAllLeds: (_, getters) => (showHidden = false) => {
     return getters.getOutputs([
       'led',
       'neopixel',
@@ -448,7 +448,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
     ], showHidden)
   },
 
-  getAllFans: (_, getters) => (showHidden=false) => {
+  getAllFans: (_, getters) => (showHidden = false) => {
     return getters.getOutputs([
       'temperature_fan',
       'controller_fan',
@@ -461,7 +461,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
   /**
    * Return toolhead fans
    */
-  getToolHeadFans: (_, getters) => (showHidden=false) => {
+  getToolHeadFans: (_, getters) => (showHidden = false) => {
     return getters.getOutputs([
       // 'temperature_fan',
       // 'controller_fan',
@@ -471,7 +471,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
     ], showHidden)
   },
 
-  getOtherFans: (_, getters) => (showHidden=false) => {
+  getOtherFans: (_, getters) => (showHidden = false) => {
     return getters.getOutputs([
       'temperature_fan',
       'controller_fan',
@@ -484,7 +484,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
   /**
    * Return output pins
    */
-  getPins: (_, getters) => (showHidden=false) => {
+  getPins: (_, getters) => (showHidden = false) => {
     const outputs = getters.getOutputs([
       'output_pin'
     ], showHidden)
@@ -500,7 +500,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
   /**
   * Return available fans and output pins
   */
-  getOutputs: (state, getters) => (filter?: string[], showHidden=false): Array<Fan | Led | OutputPin> => {
+  getOutputs: (state, getters) => (filter?: string[], showHidden = false): Array<Fan | Led | OutputPin> => {
     // Fans..
     const fans = [
       'temperature_fan',
