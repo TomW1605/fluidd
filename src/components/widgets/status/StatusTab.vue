@@ -176,6 +176,7 @@
           <v-btn
             text
             height="100%"
+            class="pa-0"
             @click="handleViewThumbnail"
           >
             <img
