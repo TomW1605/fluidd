@@ -24,7 +24,7 @@
         >
           <transition-group
             type="transition"
-            :name="!inLayout ? 'flip-list' : null"
+            :name="!inLayout ? 'flip-list' : undefined"
           >
             <template v-for="c in container">
               <component
@@ -61,6 +61,8 @@ import GcodePreviewCard from '@/components/widgets/gcode-preview/GcodePreviewCar
 import JobQueueCard from '@/components/widgets/job-queue/JobQueueCard.vue'
 import SpoolmanCard from '@/components/widgets/spoolman/SpoolmanCard.vue'
 import SensorsCard from '@/components/widgets/sensors/SensorsCard.vue'
+import RunoutSensorsCard from '@/components/widgets/runout-sensors/RunoutSensorsCard.vue'
+import BeaconCard from '@/components/widgets/beacon/BeaconCard.vue'
 
 @Component({
   components: {
@@ -78,7 +80,9 @@ import SensorsCard from '@/components/widgets/sensors/SensorsCard.vue'
     GcodePreviewCard,
     JobQueueCard,
     SpoolmanCard,
-    SensorsCard
+    SensorsCard,
+    RunoutSensorsCard,
+    BeaconCard
   }
 })
 export default class Dashboard extends Mixins(StateMixin) {
@@ -115,7 +119,15 @@ export default class Dashboard extends Mixins(StateMixin) {
   }
 
   get hasCameras (): boolean {
-    return this.$store.getters['cameras/getEnabledCameras'].length > 0
+    return this.$store.getters['webcams/getEnabledWebcams'].length > 0
+  }
+
+  get hasHeatersOrTemperatureSensors () {
+    return (
+      this.$store.getters['printer/getHeaters'].length > 0 ||
+      this.$store.getters['printer/getOutputs'](['temperature_fan']).length > 0 ||
+      this.$store.getters['printer/getSensors'].length > 0
+    )
   }
 
   get hasSensors (): boolean {
@@ -134,16 +146,32 @@ export default class Dashboard extends Mixins(StateMixin) {
     return this.$store.getters['mesh/getSupportsBedMesh']
   }
 
-  get supportsSpoolman () {
-    return this.$store.getters['spoolman/getSupported']
+  get supportsBeacon (): boolean {
+    return this.$store.getters['printer/getSupportsBeacon']
   }
 
-  get macros () {
-    return this.$store.getters['macros/getVisibleMacros']
+  get supportsRunoutSensors () {
+    return this.$store.getters['printer/getRunoutSensors'].length > 0
+  }
+
+  get supportsSpoolman () {
+    return this.$store.getters['server/componentSupport']('spoolman')
+  }
+
+  get hasMacros () {
+    return this.$store.getters['macros/getVisibleMacros'].length > 0
+  }
+
+  get hasOutputs () {
+    return (
+      this.$store.getters['printer/getAllFans'].length > 0 ||
+      this.$store.getters['printer/getPins'].length > 0 ||
+      this.$store.getters['printer/getAllLeds'].length > 0
+    )
   }
 
   get inLayout (): boolean {
-    return (this.$store.state.config.layoutMode)
+    return this.$store.state.config.layoutMode
   }
 
   get layout () {
@@ -194,13 +222,17 @@ export default class Dashboard extends Mixins(StateMixin) {
     // Take care of special cases.
     if (this.inLayout) return false
     if (item.id === 'camera-card' && !this.hasCameras) return true
-    if (item.id === 'macros-card' && (this.macros.length <= 0)) return true
+    if (item.id === 'macros-card' && !this.hasMacros) return true
+    if (item.id === 'outputs-card' && !this.hasOutputs) return true
     if (item.id === 'printer-status-card' && !this.klippyReady) return true
     if (item.id === 'job-queue-card' && !this.supportsJobQueue) return true
     if (item.id === 'retract-card' && !this.firmwareRetractionEnabled) return true
     if (item.id === 'bed-mesh-card' && !this.supportsBedMesh) return true
+    if (item.id === 'beacon-card' && !this.supportsBeacon) return true
+    if (item.id === 'runout-sensors-card' && !this.supportsRunoutSensors) return true
     if (item.id === 'spoolman-card' && !this.supportsSpoolman) return true
     if (item.id === 'sensors-card' && !this.hasSensors) return true
+    if (item.id === 'temperature-card' && !this.hasHeatersOrTemperatureSensors) return true
 
     // Otherwise return the opposite of whatever the enabled state is.
     return !item.enabled

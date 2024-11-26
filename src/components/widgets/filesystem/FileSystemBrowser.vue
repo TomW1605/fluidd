@@ -12,7 +12,6 @@
       :dense="dense"
       disable-pagination
       :loading="loading"
-      sort-desc
       :custom-sort="customSort"
       :search="search"
       :show-select="bulkActions"
@@ -21,19 +20,23 @@
       item-key="name"
       height="100%"
       mobile-breakpoint="0"
-      sort-by="modified"
+      must-sort
+      :sort-by.sync="sortBy"
+      :sort-desc.sync="sortDesc"
       hide-default-footer
       class="rounded-0"
       fixed-header
       @input="handleSelected"
     >
-      <template #item="{ item, isSelected, select }">
-        <tr
+      <template #item="{ headers, item, isSelected, select }">
+        <app-data-table-row
+          :headers="headers"
+          :item="item"
+          :is-selected="isSelected && item.name !== '..'"
           :class="{
             'is-disabled': disabled,
-            'v-data-table__selected': (isSelected && item.name !== '..')
+            'px-1': true
           }"
-          class="row-select px-1"
           :draggable="isItemDraggable(item)"
           @click.prevent="$emit('row-click', item, $event)"
           @contextmenu.prevent="$emit('row-click', item, $event)"
@@ -44,7 +47,7 @@
           @dragleave.prevent="handleDragLeave"
           @drop.prevent="handleDrop(item, $event)"
         >
-          <td v-if="bulkActions">
+          <template #[`item.data-table-select`]>
             <v-simple-checkbox
               v-if="item.name !== '..'"
               v-ripple
@@ -53,10 +56,13 @@
               class="mt-1"
               @click.stop="select(!isSelected)"
             />
-          </td>
-          <td>
-            <!-- icons are 16px small, or 24px for standard size. -->
-            <v-layout justify-center>
+          </template>
+
+          <template #[`item.data-table-icons`]>
+            <v-layout
+              justify-center
+              class="no-pointer-events"
+            >
               <v-icon
                 v-if="!item.thumbnails || !item.thumbnails.length"
                 :small="dense"
@@ -66,267 +72,230 @@
               </v-icon>
               <img
                 v-else
-                :style="{'max-width': `${thumbnailSize}px`, 'max-height': `${thumbnailSize}px`}"
+                :style="{
+                  'max-width': `${thumbnailSize}px`,
+                  'max-height': `${thumbnailSize}px`
+                }"
                 :src="getThumbUrl(item, root, item.path, thumbnailSize > 16, item.modified)"
               >
             </v-layout>
-          </td>
+          </template>
 
-          <file-row-item :nowrap="false">
-            {{ item.name }}
-          </file-row-item>
+          <template #[`item.name`]="{ value }">
+            {{ value }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="object_height"
-          >
-            <span v-if="item.object_height !== undefined">
-              {{ $filters.getReadableLengthString(item.object_height) }}
-            </span>
-          </file-row-item>
+          <template #[`item.history.status`]="{ value }">
+            <job-history-item-status
+              v-if="value != null"
+              :job="item.history"
+            />
+            <template v-else>
+              --
+            </template>
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="first_layer_height"
-          >
-            <span v-if="item.first_layer_height !== undefined">
-              {{ item.first_layer_height }} mm
-            </span>
-          </file-row-item>
+          <template #[`item.object_height`]="{ value }">
+            {{
+              value != null
+                ? $filters.getReadableLengthString(value)
+                : '-- '
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="layer_height"
-          >
-            <span v-if="item.layer_height !== undefined">
-              {{ item.layer_height }} mm
-            </span>
-          </file-row-item>
+          <template #[`item.first_layer_height`]="{ value }">
+            {{
+              value != null
+                ? `${value} mm`
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="filament_name"
-          >
-            <span v-if="item.filament_name !== undefined">
-              {{ item.filament_name }}
-            </span>
-          </file-row-item>
+          <template #[`item.layer_height`]="{ value }">
+            {{
+              value != null
+                ? `${value} mm`
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="filament_type"
-          >
-            <span v-if="item.filament_type !== undefined">
-              {{ item.filament_type }}
-            </span>
-          </file-row-item>
+          <template #[`item.filament_name`]="{ value }">
+            {{ value ?? '--' }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="filament_total"
-          >
-            <span v-if="item.filament_total !== undefined">
-              {{ $filters.getReadableLengthString(item.filament_total) }}
-            </span>
-          </file-row-item>
+          <template #[`item.filament_type`]="{ value }">
+            {{ value ?? '--' }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="filament_weight_total"
-          >
-            <span v-if="item.filament_weight_total !== undefined">
-              {{ $filters.getReadableWeightString(item.filament_weight_total) }}
-            </span>
-          </file-row-item>
+          <template #[`item.filament_total`]="{ value }">
+            {{
+              value != null
+                ? $filters.getReadableLengthString(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="history.filament_used"
-          >
-            <span v-if="item.history && item.history.filament_used !== undefined">
-              {{ $filters.getReadableLengthString(item.history.filament_used) }}
-            </span>
-          </file-row-item>
+          <template #[`item.filament_weight_total`]="{ value }">
+            {{
+              value != null
+                ? $filters.getReadableWeightString(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="nozzle_diameter"
-          >
-            <span v-if="item.nozzle_diameter !== undefined">
-              {{ item.nozzle_diameter }} mm
-            </span>
-          </file-row-item>
+          <template #[`item.history.filament_used`]="{ value }">
+            {{
+              value != null
+                ? $filters.getReadableLengthString(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="slicer"
-          >
-            <span v-if="item.slicer !== undefined">
-              {{ item.slicer }}
-            </span>
-          </file-row-item>
+          <template #[`item.nozzle_diameter`]="{ value }">
+            {{
+              value != null
+                ? `${value} mm`
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="slicer_version"
-          >
-            <span v-if="item.slicer_version !== undefined">
-              {{ item.slicer_version }}
-            </span>
-          </file-row-item>
+          <template #[`item.slicer`]="{ value }">
+            {{ value ?? '--' }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="estimated_time"
-          >
-            <span v-if="item.estimated_time !== undefined">
-              {{ $filters.formatCounterTime(item.estimated_time) }}
-            </span>
-          </file-row-item>
+          <template #[`item.slicer_version`]="{ value }">
+            {{ value ?? '--' }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="history.print_duration"
-          >
-            <span v-if="item.history && item.history.print_duration !== undefined">
-              {{ $filters.formatCounterTime(item.history.print_duration) }}
-            </span>
-          </file-row-item>
+          <template #[`item.estimated_time`]="{ value }">
+            {{
+              value != null
+                ? $filters.formatCounterSeconds(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="history.total_duration"
-          >
-            <span v-if="item.history && item.history.total_duration !== undefined">
-              {{ $filters.formatCounterTime(item.history.total_duration) }}
-            </span>
-          </file-row-item>
+          <template #[`item.history.print_duration`]="{ value }">
+            {{
+              value != null
+                ? $filters.formatCounterSeconds(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="first_layer_bed_temp"
-          >
-            <span v-if="item.first_layer_bed_temp !== undefined">
-              {{ item.first_layer_bed_temp }}<small>°C</small>
-            </span>
-          </file-row-item>
+          <template #[`item.history.total_duration`]="{ value }">
+            {{
+              value != null
+                ? $filters.formatCounterSeconds(value)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="first_layer_extr_temp"
-          >
-            <span v-if="item.first_layer_extr_temp !== undefined">
-              {{ item.first_layer_extr_temp }}<small>°C</small>
-            </span>
-          </file-row-item>
+          <template #[`item.first_layer_bed_temp`]="{ value }">
+            <template v-if="value != null">
+              {{ value }}<small>°C</small>
+            </template>
+            <template v-else>
+              --
+            </template>
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="chamber_temp"
-          >
-            <span v-if="item.chamber_temp !== undefined">
-              {{ item.chamber_temp }}<small>°C</small>
-            </span>
-          </file-row-item>
+          <template #[`item.first_layer_extr_temp`]="{ value }">
+            <template v-if="value != null">
+              {{ value }}<small>°C</small>
+            </template>
+            <template v-else>
+              --
+            </template>
+          </template>
 
-          <file-row-item
-            v-if="root === 'gcodes'"
-            :headers="headers"
-            item-value="print_start_time"
-          >
-            <span v-if="item.print_start_time !== undefined && item.print_start_time !== null">
-              {{ $filters.formatDateTime(item.print_start_time * 1000) }}
-            </span>
-          </file-row-item>
+          <template #[`item.chamber_temp`]="{ value }">
+            <template v-if="value != null">
+              {{ value }}<small>°C</small>
+            </template>
+            <template v-else>
+              --
+            </template>
+          </template>
 
-          <file-row-item
-            :headers="headers"
-            item-value="modified"
-          >
-            <span v-if="item.modified !== undefined && item.name !== '..'">
-              {{ $filters.formatDateTime(item.modified * 1000) }}
-            </span>
-          </file-row-item>
+          <template #[`item.print_start_time`]="{ value }">
+            {{
+              value != null
+                ? $filters.formatDateTime(value * 1000)
+                : '--'
+            }}
+          </template>
 
-          <file-row-item
-            :headers="headers"
-            item-value="size"
-          >
-            <span v-if="item.size !== undefined && item.name !== '..'">
-              {{ $filters.getReadableFileSizeString(item.size) }}
-            </span>
-          </file-row-item>
-        </tr>
+          <template #[`item.modified`]="{ value }">
+            {{
+              value != null && item.name !== '..'
+                ? $filters.formatDateTime(value * 1000)
+                : '--'
+            }}
+          </template>
+
+          <template #[`item.size`]="{ value }">
+            {{
+              value != null && item.name !== '..'
+                ? $filters.getReadableFileSizeString(value)
+                : '--'
+            }}
+          </template>
+        </app-data-table-row>
       </template>
     </v-data-table>
   </div>
 </template>
 
 <script lang="ts">
-import { Component, Prop, Mixins, VModel } from 'vue-property-decorator'
+import { Component, Prop, Mixins, VModel, PropSync } from 'vue-property-decorator'
 import type { FileBrowserEntry, RootProperties } from '@/store/files/types'
-import type { AppTableHeader } from '@/types'
 import FilesMixin from '@/mixins/files'
 
-import FileRowItem from './FileRowItem.vue'
+import JobHistoryItemStatus from '@/components/widgets/history/JobHistoryItemStatus.vue'
 import { SupportedImageFormats, SupportedVideoFormats } from '@/globals'
+import type { TextSortOrder } from '@/store/config/types'
+import type { DataTableHeader } from 'vuetify'
 
 @Component({
   components: {
-    FileRowItem
+    JobHistoryItemStatus
   }
 })
 export default class FileSystemBrowser extends Mixins(FilesMixin) {
-  @VModel({ type: Array, required: true })
-    selected!: FileBrowserEntry[]
+  @VModel({ type: Array<FileBrowserEntry>, required: true })
+  selected!: FileBrowserEntry[]
 
   @Prop({ type: String, required: true })
   readonly root!: string
 
-  @Prop({ type: Array, required: true })
+  @Prop({ type: Array<FileBrowserEntry>, required: true })
   readonly files!: FileBrowserEntry[]
 
-  @Prop({ type: Boolean, default: false })
-  readonly dense!: boolean
+  @Prop({ type: Boolean })
+  readonly dense?: boolean
 
-  @Prop({ type: Boolean, default: false })
-  readonly loading!: boolean
+  @Prop({ type: Boolean })
+  readonly loading?: boolean
 
   // Currently defined list of headers.
-  @Prop({ type: Array, required: true })
-  readonly headers!: AppTableHeader[]
+  @Prop({ type: Array<DataTableHeader>, required: true })
+  readonly headers!: DataTableHeader[]
 
-  @Prop({ type: String, required: false })
-  readonly search!: string
+  @Prop({ type: String })
+  readonly search?: string
 
-  @Prop({ type: Boolean, required: true })
-  readonly dragState!: boolean
+  @PropSync('dragState', { type: Boolean, required: true })
+  dragStateModel!: boolean
 
-  @Prop({ type: Boolean, default: false })
-  readonly disabled!: boolean
+  @Prop({ type: Boolean })
+  readonly disabled?: boolean
 
-  @Prop({ type: Boolean, default: false })
-  readonly bulkActions!: boolean
+  @Prop({ type: Boolean })
+  readonly bulkActions?: boolean
 
   dragItem: FileBrowserEntry | null = null
-  ghost: HTMLDivElement | undefined = undefined
+  ghost?: HTMLDivElement = undefined
 
   // Is the history component enabled
   get showHistory () {
@@ -345,13 +314,17 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
   }
 
   get thumbnailSize () {
-    const thumbnailSize = this.$store.state.config.uiSettings.general.thumbnailSize
+    const thumbnailSize: number = this.$store.state.config.uiSettings.general.thumbnailSize
 
     return this.dense ? thumbnailSize / 2 : thumbnailSize
   }
 
-  get textSortOrder () {
+  get textSortOrder (): TextSortOrder {
     return this.$store.state.config.uiSettings.general.textSortOrder
+  }
+
+  get filesAndFoldersDragAndDrop (): boolean {
+    return this.$store.state.config.uiSettings.general.filesAndFoldersDragAndDrop
   }
 
   get draggedItems () {
@@ -367,6 +340,26 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
     }
 
     return []
+  }
+
+  get sortBy (): string {
+    const sortBy: string | null = this.$store.state.config.uiSettings.fileSystem.sortBy[this.root]
+
+    return sortBy ?? 'modified'
+  }
+
+  set sortBy (value: string | null | undefined) {
+    this.$store.dispatch('config/updateFileSystemSortBy', { root: this.root, value: value ?? null })
+  }
+
+  get sortDesc (): boolean {
+    const sortDesc: boolean | null = this.$store.state.config.uiSettings.fileSystem.sortDesc[this.root]
+
+    return sortDesc ?? true
+  }
+
+  set sortDesc (value: boolean | null | undefined) {
+    this.$store.dispatch('config/updateFileSystemSortDesc', { root: this.root, value: value ?? null })
   }
 
   customSort (items: FileBrowserEntry[], sortBy: string[], sortDesc: boolean[], locale: string) {
@@ -394,7 +387,7 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
         return readonly ? '$fileZipLock' : '$fileZip'
       } else if (
         SupportedImageFormats.includes(`.${item.extension}`) ||
-            SupportedVideoFormats.includes(`.${item.extension}`)
+        SupportedVideoFormats.includes(`.${item.extension}`)
       ) {
         return readonly ? '$fileImageLock' : '$fileImage'
       } else {
@@ -410,6 +403,7 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
   // Determines if a row is currently in a draggable state or not.
   isItemDraggable (item: FileBrowserEntry) {
     return (
+      this.filesAndFoldersDragAndDrop &&
       item.name !== '..' &&
       this.files.length > 0 &&
       (
@@ -431,9 +425,9 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
 
   // Fake a drag image when the user drags a file or folder.
   handleDragStart (item: FileBrowserEntry, event: DragEvent) {
-    if (this.dragState !== true) {
+    if (this.dragStateModel !== true) {
       this.dragItem = item
-      this.$emit('update:dragState', true)
+      this.dragStateModel = true
     }
 
     if (event.dataTransfer) {
@@ -442,19 +436,14 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
       this.ghost = document.createElement('div')
       this.ghost.classList.add('bulk-drag')
       this.ghost.classList.add((this.$vuetify.theme.dark) ? 'theme--dark' : 'theme--light')
-      this.ghost.innerHTML = this.$tc('app.file_system.tooltip.move_item', draggedItems.length)
+      this.ghost.innerHTML = draggedItems.length > 1
+        ? this.$tc('app.file_system.tooltip.items_count', draggedItems.length)
+        : item.name
       document.body.appendChild(this.ghost)
-      event.dataTransfer.effectAllowed = 'linkMove'
+      event.dataTransfer.effectAllowed = 'all'
       event.dataTransfer.setDragImage(this.ghost, 0, 0)
-      if (item.type === 'file') {
-        const filepath = item.path ? `${this.root}/${item.path}` : this.root
-        const url = this.createFileUrl(item.filename, filepath)
 
-        event.dataTransfer.setData('text/html', `<A HREF="${encodeURI(url)}">${item.filename}</A>`)
-        event.dataTransfer.setData('text/plain', url)
-        event.dataTransfer.setData('text/uri-list', url)
-      }
-      this.$emit('drag-start', draggedItems, event.dataTransfer)
+      this.$emit('drag-start', item, draggedItems, event.dataTransfer)
     }
   }
 
@@ -534,7 +523,7 @@ export default class FileSystemBrowser extends Mixins(FilesMixin) {
     }
 
     this.dragItem = null
-    this.$emit('update:dragState', false)
+    this.dragStateModel = false
   }
 }
 </script>

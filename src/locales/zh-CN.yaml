@@ -60,7 +60,6 @@ app:
     filters:
       label:
         print_start_time: 隐藏已打印项目
-        print_start_time_desc: 隐藏已经打印的项目文件
         hidden_files_folders: 筛选隐藏的文件和文件夹
         klipper_backup_files: 隐藏Klipper备份文件
         rolled_log_files: 筛选滚动日志文件
@@ -91,10 +90,9 @@ app:
       upload_file: 上传文件
     tooltip:
       low_on_space: 磁盘空间不足
-      move_item: 移动项目|移动｛count｝个项目
       root_disabled: '{root} G代码文件目录不可用，请首先连接打印机或者检查G代码存放目录的路径与读权限'
     url:
-      klipper_config: 'https://www.klipper3d.org/zh/Config_Reference.html#%{hash}'
+      klipper_config: '%{klipperDomain}/zh/Config_Reference.html#%{hash}'
       moonraker_config: 'https://moonraker.readthedocs.io/en/latest/configuration/#%{hash}'
       moonraker_telegram_bot_config: 'https://github.com/nlef/moonraker-telegram-bot/wiki/Sample-config#%{hash}'
   gcode:
@@ -291,7 +289,6 @@ app:
       upload_and_print: 上传并打印
       used: 已用
       username: 用户名
-      variance: 偏差值
       velocity: 速度
       version_sort: 版本排序
       visible: 可见性
@@ -502,7 +499,6 @@ app:
       height: 高度
       gcode_coords: 使用 GCode 坐标
       icon: 图标
-      ignore_default_bed_mesh_pending_configuration_changes: 忽略默认的床网，等待配置更改
       invert_x_control: 反转X轴控制
       invert_y_control: 反转Y轴控制
       invert_z_control: 反转Z轴控制

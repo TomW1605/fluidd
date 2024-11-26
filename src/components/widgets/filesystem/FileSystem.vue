@@ -19,7 +19,7 @@
       :path="visiblePath"
       :disabled="disabled"
       :loading="filesLoading"
-      :headers="headers"
+      :headers="configurableHeaders"
       @root-change="handleRootChange"
       @refresh="refreshPath(currentPath)"
       @add-file="handleAddFileDialog"
@@ -41,7 +41,7 @@
     <file-system-browser
       v-if="headers"
       v-model="selected"
-      :headers="visibleHeaders"
+      :headers="headers"
       :root="currentRoot"
       :dense="dense"
       :loading="filesLoading"
@@ -125,6 +125,7 @@
       :type="filePreviewState.type"
       :width="filePreviewState.width"
       :readonly="filePreviewState.readonly"
+      :path="currentPath"
       @remove="handleRemove"
       @download="handleDownload"
     />
@@ -141,7 +142,7 @@
 <script lang="ts">
 import { Component, Prop, Mixins, Watch } from 'vue-property-decorator'
 import { SocketActions } from '@/api/socketActions'
-import type { AppDirectory, AppFile, AppFileWithMeta, FilesUpload, FileFilterType, FileBrowserEntry, RootProperties } from '@/store/files/types'
+import type { AppDirectory, AppFile, AppFileWithMeta, FileUpload, FileFilterType, FileBrowserEntry, RootProperties } from '@/store/files/types'
 import StateMixin from '@/mixins/state'
 import FilesMixin from '@/mixins/files'
 import ServicesMixin from '@/mixins/services'
@@ -156,6 +157,9 @@ import FileSystemGoToFileDialog from './FileSystemGoToFileDialog.vue'
 import FilePreviewDialog from './FilePreviewDialog.vue'
 import type { AppTableHeader, FileWithPath } from '@/types'
 import { getFilesFromDataTransfer, hasFilesInDataTransfer } from '@/util/file-system-entry'
+import { getFileDataTransferDataFromDataTransfer, hasFileDataTransferTypeInDataTransfer, setFileDataTransferDataInDataTransfer } from '@/util/file-data-transfer'
+import consola from 'consola'
+import type { DataTableHeader } from 'vuetify'
 
 /**
  * Represents the filesystem, bound to moonrakers supplied roots.
@@ -181,12 +185,12 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
   @Prop({ type: [String, Array], required: true })
   readonly roots!: string | string[]
 
-  @Prop({ type: String, required: false })
+  @Prop({ type: String, required: true })
   readonly name!: string
 
   // If dense, hide the meta and reduce the overall size.
-  @Prop({ type: Boolean, default: false })
-  readonly dense!: boolean
+  @Prop({ type: Boolean })
+  readonly dense?: boolean
 
   // Constrain height
   @Prop({ type: [Number, String] })
@@ -197,11 +201,8 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
   readonly maxHeight!: number | string
 
   // Allow bulk-actions
-  @Prop({ type: Boolean, default: false })
-  readonly bulkActions!: boolean
-
-  // Ready. True once the available roots have loaded from moonraker.
-  ready = false
+  @Prop({ type: Boolean })
+  readonly bulkActions?: boolean
 
   // Maintains the path and root.
   currentRoot = ''
@@ -270,11 +271,19 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
   }
 
   // Gets available roots.
-  get availableRoots () {
-    if (!Array.isArray(this.roots)) {
-      return [this.roots]
+  get availableRoots (): string[] {
+    const roots = !Array.isArray(this.roots)
+      ? [this.roots]
+      : this.roots
+
+    if (
+      roots.length > 0 &&
+      !roots.includes(this.currentRoot)
+    ) {
+      this.currentRoot = roots[0]
     }
-    return this.roots
+
+    return roots
   }
 
   // Properties of the current root.
@@ -296,60 +305,163 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
     }
   }
 
-  // The available headers, based on the current root and system configuration.
-  get headers (): AppTableHeader[] {
-    // Base headers. All roots have these.
-    let headers: any = [
-      { text: '', value: 'data-table-icons', sortable: false, width: '24px' },
+  get configurableHeaders (): AppTableHeader[] {
+    const isNotDashboard = this.name !== 'dashboard'
+
+    const headers: AppTableHeader[] = [
+      ...this.currentRoot === 'gcodes'
+        ? [
+            {
+              text: this.$tc('app.general.table.header.status'),
+              value: 'history.status',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.height'),
+              value: 'object_height',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.first_layer_height'),
+              value: 'first_layer_height',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.layer_height'),
+              value: 'layer_height',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.filament_name'),
+              value: 'filament_name',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.filament_type'),
+              value: 'filament_type',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.filament'),
+              value: 'filament_total',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.filament_weight_total'),
+              value: 'filament_weight_total',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.filament_used'),
+              value: 'history.filament_used',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.nozzle_diameter'),
+              value: 'nozzle_diameter',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.slicer'),
+              value: 'slicer',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.slicer_version'),
+              value: 'slicer_version',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.estimated_time'),
+              value: 'estimated_time',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.print_duration'),
+              value: 'history.print_duration',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.total_duration'),
+              value: 'history.total_duration',
+              visible: isNotDashboard,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.first_layer_bed_temp'),
+              value: 'first_layer_bed_temp',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.first_layer_extr_temp'),
+              value: 'first_layer_extr_temp',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.chamber_temp'),
+              value: 'chamber_temp',
+              visible: false,
+              cellClass: 'text-no-wrap'
+            },
+            {
+              text: this.$tc('app.general.table.header.last_printed'),
+              value: 'print_start_time',
+              cellClass: 'text-no-wrap'
+            }
+          ]
+        : [],
       {
-        text: this.$t('app.general.table.header.name'),
-        value: 'name'
+        text: this.$tc('app.general.table.header.modified'),
+        value: 'modified',
+        cellClass: 'text-no-wrap',
+        width: '1%'
+      },
+      {
+        text: this.$tc('app.general.table.header.size'),
+        value: 'size',
+        cellClass: 'text-no-wrap',
+        width: '1%'
       }
     ]
 
-    // If this is a gcode root, then metadata is available, including potentially history data.
-    if (this.currentRoot === 'gcodes') {
-      headers = [
-        ...headers,
-        { text: this.$t('app.general.table.header.height'), value: 'object_height', configurable: true },
-        { text: this.$t('app.general.table.header.first_layer_height'), value: 'first_layer_height', configurable: true },
-        { text: this.$t('app.general.table.header.layer_height'), value: 'layer_height', configurable: true },
-        { text: this.$t('app.general.table.header.filament_name'), value: 'filament_name', configurable: true },
-        { text: this.$t('app.general.table.header.filament_type'), value: 'filament_type', configurable: true },
-        { text: this.$t('app.general.table.header.filament'), value: 'filament_total', configurable: true },
-        { text: this.$t('app.general.table.header.filament_weight_total'), value: 'filament_weight_total', configurable: true },
-        { text: this.$t('app.general.table.header.filament_used'), value: 'history.filament_used', configurable: true },
-        { text: this.$t('app.general.table.header.nozzle_diameter'), value: 'nozzle_diameter', configurable: true },
-        { text: this.$t('app.general.table.header.slicer'), value: 'slicer', configurable: true },
-        { text: this.$t('app.general.table.header.slicer_version'), value: 'slicer_version', configurable: true },
-        { text: this.$t('app.general.table.header.estimated_time'), value: 'estimated_time', configurable: true },
-        { text: this.$t('app.general.table.header.print_duration'), value: 'history.print_duration', configurable: true },
-        { text: this.$t('app.general.table.header.total_duration'), value: 'history.total_duration', configurable: true },
-        { text: this.$t('app.general.table.header.first_layer_bed_temp'), value: 'first_layer_bed_temp', configurable: true },
-        { text: this.$t('app.general.table.header.first_layer_extr_temp'), value: 'first_layer_extr_temp', configurable: true },
-        { text: this.$t('app.general.table.header.chamber_temp'), value: 'chamber_temp', configurable: true },
-        {
-          text: this.$t('app.general.table.header.last_printed'),
-          value: 'print_start_time',
-          configurable: true
-        }
-      ]
-    }
-
-    // Final headers. All roots have these.
-    headers = [
-      ...headers,
-      { text: this.$t('app.general.table.header.modified'), value: 'modified', width: '1%', configurable: true },
-      { text: this.$t('app.general.table.header.size'), value: 'size', width: '1%', configurable: true }
-    ]
-
-    // Return headers
     const key = `${this.currentRoot}_${this.name}`
-    return this.$store.getters['config/getMergedTableHeaders'](headers, key)
+    const mergedTableHeaders = this.$store.getters['config/getMergedTableHeaders'](headers, key) as AppTableHeader[]
+
+    return mergedTableHeaders
   }
 
-  get visibleHeaders (): AppTableHeader[] {
-    return this.headers.filter(header => header.visible || header.visible === undefined)
+  // The available headers, based on the current root and system configuration.
+  get headers (): DataTableHeader[] {
+    return [
+      {
+        text: '',
+        value: 'data-table-icons',
+        sortable: false,
+        width: '24px'
+      },
+      {
+        text: this.$tc('app.general.table.header.name'),
+        value: 'name'
+      },
+      ...this.configurableHeaders
+        .filter(header => header.visible !== false)
+    ]
   }
 
   // The current path for the given root.
@@ -393,6 +505,18 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
             }
             break
 
+          case 'moonraker_backup_files':
+            if (file.type === 'file' && file.filename === '.moonraker.conf.bkp') {
+              return false
+            }
+            break
+
+          case 'moonraker_temporary_upload_files':
+            if (file.name.endsWith('.mru')) {
+              return false
+            }
+            break
+
           case 'klipper_backup_files':
             if (file.type === 'file' && file.filename.match(/^printer-\d{8}_\d{6}\.cfg$/)) {
               return false
@@ -406,7 +530,16 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
             break
 
           case 'rolled_log_files':
-            if (file.type === 'file' && file.filename.match(/\.\d{4}-\d{2}-\d{2}$/)) {
+            if (file.type === 'file' && (
+              file.filename.match(/\.\d{4}-\d{2}-\d{2}(_\d{2}-\d{2}-\d{2})?$/) ||
+              file.filename.match(/\.log\.\d+$/)
+            )) {
+              return false
+            }
+            break
+
+          case 'crowsnest_backup_files':
+            if (file.type === 'file' && file.filename.match(/^crowsnest\.conf\.\d{4}-\d{2}-\d{2}-\d{4}$/)) {
               return false
             }
             break
@@ -437,12 +570,8 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
   }
 
   // Get a list of currently active uploads.
-  get currentUploads (): FilesUpload[] {
+  get currentUploads (): FileUpload[] {
     return this.$store.state.files.uploads
-  }
-
-  get registeredRoots () {
-    return this.$store.state.server.info.registered_directories || []
   }
 
   get fileDropRoot () {
@@ -461,20 +590,6 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
       .filter(file => file.type === 'file' && thumbnailFilenames.has(file.filename))
 
     items.push(...thumbnails)
-  }
-
-  // Set the initial root, and load the dir.
-  @Watch('registeredRoots', { immediate: true })
-  onRegisteredRoots (roots: string[]) {
-    if (roots.length > 0 && !this.ready) {
-      for (const root of this.availableRoots) {
-        if (roots.includes(root)) {
-          this.currentRoot = root
-          this.ready = true
-          break
-        }
-      }
-    }
   }
 
   // If the root changes, reset the path and load the root path files.
@@ -636,69 +751,73 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
     this.goToFileDialogOpen = true
   }
 
-  handleFileOpenDialog (file: AppFile, mode: 'edit' | 'view' | undefined = undefined) {
-    const viewOnly = mode
-      ? mode === 'view'
-      : this.rootProperties.canView.includes(`.${file.extension}`)
+  async handleFileOpenDialog (file: AppFile, mode: 'edit' | 'view' | undefined = undefined) {
+    try {
+      const viewOnly = mode
+        ? mode === 'view'
+        : this.rootProperties.canView.includes(`.${file.extension}`)
 
-    // Grab the file. This should provide a dialog.
-    this.getFile(
-      file.filename,
-      this.currentPath,
-      file.size,
-      {
-        responseType: viewOnly ? 'arraybuffer' : 'text',
-        transformResponse: [v => v]
-      }
-    )
-      .then(response => {
-        if (viewOnly) {
-          // Open the file preview dialog.
-          const type = response.headers['content-type']
-          const blob = new Blob([response.data], { type })
-          this.filePreviewState = {
-            open: true,
-            file,
-            filename: file.filename,
-            extension: file.extension,
-            src: URL.createObjectURL(blob),
-            type,
-            readonly: file.permissions === 'r' || this.rootProperties.readonly
-          }
-        } else {
-          // Open the edit dialog.
-          this.fileEditorDialogState = {
-            open: true,
-            contents: response.data,
-            filename: file.filename,
-            loading: false,
-            readonly: file.permissions === 'r' || this.rootProperties.readonly
-          }
+      // Grab the file. This should provide a dialog.
+      const response = await this.getFile(
+        file.filename,
+        this.currentPath,
+        file.size,
+        {
+          responseType: viewOnly ? 'arraybuffer' : 'text',
+          transformResponse: [v => v]
         }
-      })
-      .finally(() => this.$store.dispatch('files/removeFileDownload'))
-      .catch(e => e)
+      )
+
+      if (viewOnly) {
+        // Open the file preview dialog.
+        const type = response.headers['content-type']
+        const blob = new Blob([response.data], { type })
+        this.filePreviewState = {
+          open: true,
+          file,
+          filename: file.filename,
+          extension: file.extension,
+          src: URL.createObjectURL(blob),
+          type,
+          readonly: file.permissions === 'r' || this.rootProperties.readonly
+        }
+      } else {
+        // Open the edit dialog.
+        this.fileEditorDialogState = {
+          open: true,
+          contents: response.data,
+          filename: file.filename,
+          loading: false,
+          readonly: file.permissions === 'r' || this.rootProperties.readonly
+        }
+      }
+    } catch (error: unknown) {
+      consola.error('[FileSystem] open file', error)
+    }
   }
 
   async handlePreviewGcode (file: AppFile | AppFileWithMeta) {
-    this.getGcode(file)
-      .then(response => response?.data)
-      .then(gcode => {
-        if (!gcode) return
+    try {
+      const response = await this.getGcode(file)
 
-        if (this.$router.currentRoute.path !== '/' || !this.$store.getters['layout/isEnabledInCurrentLayout']('gcode-preview-card')) {
-          this.$router.push({ path: '/preview' })
-        }
+      const gcode = response?.data
 
-        this.$store.dispatch('gcodePreview/loadGcode', {
-          file,
-          gcode
-        })
+      if (!gcode) return
+
+      if (
+        this.$router.currentRoute.name !== 'home' ||
+        !this.$store.getters['layout/isEnabledInCurrentLayout']('gcode-preview-card')
+      ) {
+        this.$router.push({ name: 'preview' })
+      }
+
+      this.$store.dispatch('gcodePreview/loadGcode', {
+        file,
+        gcode
       })
-      .catch(e => e)
-      .finally(() => {
-        this.$store.dispatch('files/removeFileDownload')
-      })
+    } catch (error: unknown) {
+      consola.error('[FileSystem] preview gcode', error)
+    }
   }
 
   handleRefreshMetadata (file: AppFileWithMeta) {
@@ -731,8 +850,8 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
 
     const filename = file.path ? `${file.path}/${file.filename}` : file.filename
 
-    const spoolmanSupported = this.$store.getters['spoolman/getSupported']
-    const autoSpoolSelectionDialog = this.$store.state.config.uiSettings.spoolman.autoSpoolSelectionDialog
+    const spoolmanSupported = this.$store.getters['spoolman/getAvailable']
+    const autoSpoolSelectionDialog: boolean = this.$store.state.config.uiSettings.spoolman.autoSpoolSelectionDialog
     if (spoolmanSupported && autoSpoolSelectionDialog) {
       this.$store.commit('spoolman/setDialogState', {
         show: true,
@@ -745,8 +864,8 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
     SocketActions.printerPrintStart(filename)
 
     // If we aren't on the dashboard, push the user back there.
-    if (this.$router.currentRoute.path !== '/') {
-      this.$router.push({ path: '/' })
+    if (this.$router.currentRoute.name !== 'home') {
+      this.$router.push({ name: 'home' })
     }
   }
 
@@ -796,22 +915,29 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
     })
   }
 
-  handleDragStart (source: FileBrowserEntry| FileBrowserEntry[], dataTransfer: DataTransfer) {
-    if (this.currentRoot === 'gcodes') {
-      const items = Array.isArray(source)
-        ? source.filter(item => item.name !== '..')
-        : [source]
+  handleDragStart (item: FileBrowserEntry, items: FileBrowserEntry[], dataTransfer: DataTransfer) {
+    if (item.type === 'file') {
+      const url = this.createFileUrl(item.name, this.currentPath)
 
+      dataTransfer.setData('text/html', `<A HREF="${encodeURI(url)}">${item.filename}</A>`)
+      dataTransfer.setData('text/plain', url)
+      dataTransfer.setData('text/uri-list', url)
+    }
+
+    setFileDataTransferDataInDataTransfer(dataTransfer, 'files', {
+      path: this.currentPath,
+      items: items.map(file => file.name)
+    })
+
+    if (this.currentRoot === 'gcodes') {
       const files = items
         .filter((item): item is AppFile => item.type === 'file' && this.rootProperties.accepts.includes(`.${item.extension}`))
 
       if (files.length > 0) {
-        const data = {
+        setFileDataTransferDataInDataTransfer(dataTransfer, 'jobs', {
           path: files[0].path,
-          jobs: files.map(file => file.name)
-        }
-
-        dataTransfer.setData('x-fluidd-jobs', JSON.stringify(data))
+          items: files.map(file => file.name)
+        })
       }
     }
   }
@@ -835,12 +961,12 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
       ? file.filter(item => item.name !== '..')
       : [file]
 
-    const res = await this.$confirm(
+    const result = await this.$confirm(
       this.$tc('app.general.simple_form.msg.confirm_delete', items.length),
       { title: this.$tc('app.general.label.confirm'), color: 'card-heading', icon: '$error' }
     )
 
-    if (res) {
+    if (result) {
       this.filePreviewState.open = false
 
       if (this.currentRoot === 'timelapse') {
@@ -864,12 +990,12 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
     this.$store.dispatch('wait/removeWait', wait)
   }
 
-  handleCancelUpload (file: FilesUpload) {
+  handleCancelUpload (file: FileUpload) {
     if (!file.complete) {
       // Hasn't started uploading...
       if (file.loaded === 0) {
         this.$store.dispatch('files/updateFileUpload', {
-          filepath: file.filepath,
+          uid: file.uid,
           cancelled: true
         })
       }
@@ -929,9 +1055,18 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
   }
 
   handleCreateZip (file: FileBrowserEntry | FileBrowserEntry[]) {
+    const date = new Date()
+    const year = date.getFullYear().toString()
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const day = date.getDate().toString().padStart(2, '0')
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+    const seconds = date.getSeconds().toString().padStart(2, '0')
+    const timestamp = `${year}${month}${day}-${hours}${minutes}${seconds}`
+
     const dest = Array.isArray(file)
-      ? `${this.currentPath}/${Date.now()}.zip`
-      : `${this.currentPath}/${file.name}_${Date.now()}.zip`
+      ? `${this.currentPath}/${timestamp}.zip`
+      : `${this.currentPath}/${file.name}-${timestamp}.zip`
 
     const items = (Array.isArray(file) ? file : [file])
       .map(item => `${this.currentPath}/${item.name}`)
@@ -950,7 +1085,10 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
       !this.rootProperties.readonly &&
       !this.dragState.browserState &&
       event.dataTransfer &&
-      hasFilesInDataTransfer(event.dataTransfer)
+      (
+        hasFilesInDataTransfer(event.dataTransfer) ||
+        hasFileDataTransferTypeInDataTransfer(event.dataTransfer, 'files')
+      )
     ) {
       event.preventDefault()
 
@@ -969,13 +1107,23 @@ export default class FileSystem extends Mixins(StateMixin, FilesMixin, ServicesM
 
     if (
       !this.fileDropRoot &&
-      event.dataTransfer &&
-      !this.rootProperties.readonly
+      !this.rootProperties.readonly &&
+      event.dataTransfer
     ) {
-      const files = await getFilesFromDataTransfer(event.dataTransfer)
+      if (hasFileDataTransferTypeInDataTransfer(event.dataTransfer, 'files')) {
+        const files = getFileDataTransferDataFromDataTransfer(event.dataTransfer, 'files')
 
-      if (files) {
-        this.handleUpload(files, false)
+        for (const file of files.items) {
+          const src = `${files.path}/${file}`
+          const dest = `${this.currentPath}/${file}`
+          SocketActions.serverFilesCopy(src, dest)
+        }
+      } else if (hasFilesInDataTransfer(event.dataTransfer)) {
+        const files = await getFilesFromDataTransfer(event.dataTransfer)
+
+        if (files) {
+          this.handleUpload(files, false)
+        }
       }
     }
   }

@@ -7,8 +7,8 @@
     content-classes="flex-grow-1 flow-shrink-0"
     menu-breakpoint="none"
     menu-icon="$cog"
-    :draggable="!fullScreen"
-    :collapsable="!fullScreen"
+    :draggable="!fullscreen"
+    :collapsable="!fullscreen"
     layout-path="dashboard.console-card"
     @collapsed="handleCollapseChange"
   >
@@ -26,13 +26,13 @@
       </app-btn>
 
       <app-btn
-        v-if="!fullScreen"
+        v-if="!fullscreen"
         color=""
         fab
         x-small
         text
         class="ms-1 my-1"
-        @click="$filters.routeTo($router, '/console')"
+        @click="$filters.routeTo({ name: 'console' })"
       >
         <v-icon>$fullScreen</v-icon>
       </app-btn>
@@ -130,7 +130,7 @@
       ref="console"
       :scrolling-paused.sync="scrollingPaused"
       :items="items"
-      :height="fullScreen ? (height - 236) : 300"
+      :fullscreen="fullscreen"
     />
   </collapsable-card>
 </template>
@@ -146,23 +146,8 @@ import type { ConsoleEntry, ConsoleFilter } from '@/store/console/types'
   }
 })
 export default class ConsoleCard extends Vue {
-  height = 0
-
-  created () {
-    window.addEventListener('resize', this.changeHeight)
-    this.changeHeight()
-  }
-
-  destroyed () {
-    window.removeEventListener('resize', this.changeHeight)
-  }
-
-  changeHeight () {
-    this.height = window.innerHeight
-  }
-
-  @Prop({ type: Boolean, default: false })
-  readonly fullScreen!: boolean
+  @Prop({ type: Boolean })
+  readonly fullscreen?: boolean
 
   @Ref('console')
   readonly consoleElement!: Console
@@ -207,7 +192,7 @@ export default class ConsoleCard extends Vue {
     return (this.$store.state.config.layoutMode)
   }
 
-  get autoScroll () {
+  get autoScroll (): boolean {
     return this.$store.state.console.autoScroll
   }
 

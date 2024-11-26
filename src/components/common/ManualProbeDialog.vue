@@ -15,6 +15,7 @@
           <v-text-field
             label="Z Min"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -25,6 +26,7 @@
           <v-text-field
             label="Z"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -35,6 +37,7 @@
           <v-text-field
             label="Z Max"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -48,7 +51,7 @@
           cols="3"
           offset="1"
         >
-          <app-btn-group>
+          <app-btn-group class="d-flex">
             <app-btn
               :disabled="!klippyReady || printerPrinting"
               color="primary"
@@ -69,7 +72,7 @@
           cols="3"
           offset="4"
         >
-          <app-btn-group>
+          <app-btn-group class="d-flex">
             <app-btn
               :disabled="!klippyReady || printerPrinting"
               color="primary"
@@ -137,8 +140,8 @@ import ToolheadMixin from '@/mixins/toolhead'
 
 @Component({})
 export default class ManualProbeDialog extends Mixins(StateMixin, ToolheadMixin) {
-  @VModel({ type: Boolean, default: false })
-    open!: boolean
+  @VModel({ type: Boolean })
+  open?: boolean
 
   get offsets () {
     return [
@@ -153,15 +156,15 @@ export default class ManualProbeDialog extends Mixins(StateMixin, ToolheadMixin)
   }
 
   get zPositionLower () {
-    return this.manualProbe.z_position_lower?.toFixed(3) || ' '
+    return this.manualProbe.z_position_lower?.toFixed(3)
   }
 
   get zPosition () {
-    return this.manualProbe.z_position?.toFixed(3) || ' '
+    return this.manualProbe.z_position?.toFixed(3)
   }
 
   get zPositionUpper () {
-    return this.manualProbe.z_position_upper?.toFixed(3) || ' '
+    return this.manualProbe.z_position_upper?.toFixed(3)
   }
 
   @Watch('isManualProbeActive')

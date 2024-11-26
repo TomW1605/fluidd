@@ -137,7 +137,7 @@ import type { VInput } from '@/types'
     ParkExtrudeRetractSettings
   }
 })
-export default class LayerMacroSettings extends Mixins(StateMixin) {
+export default class ToolheadParkingSettings extends Mixins(StateMixin) {
   @Ref('parkTimeElement')
   readonly parkTimeElement?: VInput
 
@@ -147,7 +147,7 @@ export default class LayerMacroSettings extends Mixins(StateMixin) {
   @Ref('parkPosDZElement')
   readonly parkPosDZElement?: VInput
 
-  get parkPositions (): {text: string, value: ParkPosition}[] {
+  get parkPositions (): { text: string, value: ParkPosition }[] {
     const values: ParkPosition[] = ['front_left', 'front_right', 'center', 'back_left', 'back_right', 'x_only', 'y_only', 'custom']
 
     return values.map(value => ({ text: this.$tc(`app.timelapse.setting.parkpos.${value}`), value }))

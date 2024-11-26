@@ -13,7 +13,7 @@
           :color="axisButtonColor(yHomed)"
           :disabled="axisButtonDisabled(yHomed, yHasMultipleSteppers)"
           icon="$up"
-          @click="sendMoveGcode('Y', toolheadMoveLength)"
+          @click="moveAxisBy('Y', toolheadMoveLength)"
         />
       </v-col>
       <v-col
@@ -24,7 +24,7 @@
           :color="axisButtonColor(zHomed)"
           :disabled="axisButtonDisabled(zHomed, zHasMultipleSteppers)"
           icon="$up"
-          @click="sendMoveGcode('Z', toolheadMoveLength)"
+          @click="moveAxisBy('Z', toolheadMoveLength)"
         />
       </v-col>
       <v-col
@@ -36,7 +36,7 @@
           :disabled="!klippyReady || printerPrinting"
           icon="$home"
           small-icon
-          @click="sendGcode('G28', $waits.onHomeAll)"
+          @click="homeAll"
         >
           {{ $t('app.tool.btn.home_all') }}
         </app-btn-toolhead-move>
@@ -57,7 +57,7 @@
           :color="axisButtonColor(xHomed)"
           :disabled="axisButtonDisabled(xHomed, xHasMultipleSteppers)"
           icon="$left"
-          @click="sendMoveGcode('X', toolheadMoveLength, true)"
+          @click="moveAxisBy('X', toolheadMoveLength, true)"
         />
       </v-col>
       <v-col
@@ -83,7 +83,7 @@
           :color="axisButtonColor(xHomed)"
           :disabled="axisButtonDisabled(xHomed, xHasMultipleSteppers)"
           icon="$right"
-          @click="sendMoveGcode('X', toolheadMoveLength)"
+          @click="moveAxisBy('X', toolheadMoveLength)"
         />
       </v-col>
       <v-col
@@ -129,7 +129,7 @@
           :color="axisButtonColor(yHomed)"
           :disabled="axisButtonDisabled(yHomed, yHasMultipleSteppers)"
           icon="$down"
-          @click="sendMoveGcode('Y', toolheadMoveLength, true)"
+          @click="moveAxisBy('Y', toolheadMoveLength, true)"
         />
       </v-col>
       <v-col
@@ -140,7 +140,7 @@
           :color="axisButtonColor(zHomed)"
           :disabled="axisButtonDisabled(zHomed, zHasMultipleSteppers)"
           icon="$down"
-          @click="sendMoveGcode('Z', toolheadMoveLength, true)"
+          @click="moveAxisBy('Z', toolheadMoveLength, true)"
         />
       </v-col>
       <v-col
@@ -169,6 +169,7 @@
           v-model.number="toolheadMoveLength"
           mandatory
           dense
+          class="elevation-2"
         >
           <app-btn
             v-for="(distance, index) of toolheadMoveDistances"
@@ -176,7 +177,6 @@
             small
             min-width="40"
             :value="distance"
-            :elevation="2"
             :disabled="!klippyReady"
           >
             {{ distance }}
@@ -192,75 +192,77 @@ import { Component, Mixins } from 'vue-property-decorator'
 import StateMixin from '@/mixins/state'
 import ToolheadMixin from '@/mixins/toolhead'
 
+type Axis = 'X' | 'Y' | 'Z'
+
 @Component({})
 export default class ToolheadControlCross extends Mixins(StateMixin, ToolheadMixin) {
-  moveLength = ''
-  fab = false
+  moveLength: number | null = null
 
-  get forceMove () {
+  get forceMove (): boolean {
     return this.$store.state.config.uiSettings.toolhead.forceMove
   }
 
-  get kinematics () {
-    return this.$store.getters['printer/getPrinterSettings']('printer.kinematics') || ''
+  get hasRoundBed (): boolean {
+    return this.$store.getters['printer/getHasRoundBed'] as boolean
   }
 
-  get canHomeXY () {
-    return !['delta', 'rotary_delta'].includes(this.kinematics)
+  get canHomeXY (): boolean {
+    return !this.hasRoundBed
   }
 
-  get toolheadMoveDistances () {
-    const distances = this.$store.state.config.uiSettings.general.toolheadMoveDistances
-    if (distances.includes(this.toolheadMoveLength)) {
-      return distances
+  get toolheadMoveDistances (): number[] {
+    return this.$store.state.config.uiSettings.general.toolheadMoveDistances
+  }
+
+  get toolheadMoveLength (): number {
+    if (this.moveLength == null) {
+      const defaultToolheadMoveLength: number = this.$store.state.config.uiSettings.general.defaultToolheadMoveLength
+
+      this.moveLength = this.toolheadMoveDistances.includes(defaultToolheadMoveLength)
+        ? defaultToolheadMoveLength
+        : this.toolheadMoveDistances[0]
     }
 
-    // safety for when no valid move length is present
-    return [this.toolheadMoveLength, ...distances].sort((a, b) => a - b)
+    return this.moveLength
   }
 
-  get toolheadMoveLength () {
-    return (this.moveLength === '')
-      ? this.$store.state.config.uiSettings.general.defaultToolheadMoveLength
-      : this.moveLength
-  }
-
-  set toolheadMoveLength (val: string) {
+  set toolheadMoveLength (val: number) {
     this.moveLength = val
   }
 
-  axisButtonColor (axisHomed: boolean) {
+  axisButtonColor (axisHomed: boolean): string | undefined {
     if (this.forceMove) return 'error'
 
     return axisHomed ? 'primary' : undefined
   }
 
-  axisButtonDisabled (axisHomed: boolean, axisMultipleSteppers: boolean) {
+  axisButtonDisabled (axisHomed: boolean, axisMultipleSteppers: boolean): boolean {
     return !this.klippyReady || (!axisHomed && !(this.forceMove && !axisMultipleSteppers))
   }
 
   /**
    * Send a move gcode script.
    */
-  sendMoveGcode (axis: string, distance: string, negative = false) {
-    axis = axis.toLowerCase()
-    const rate = (axis.toLowerCase() === 'z')
+  moveAxisBy (axis: Axis, distance: number, negative = false) {
+    const rate: number = axis === 'Z'
       ? this.$store.state.config.uiSettings.general.defaultToolheadZSpeed
       : this.$store.state.config.uiSettings.general.defaultToolheadXYSpeed
-    const inverted = this.$store.state.config.uiSettings.general.axis[axis].inverted || false
-    distance = ((negative && !inverted) || (!negative && inverted))
-      ? '-' + distance
+    const inverted = this.$store.state.config.uiSettings.general.axis[axis.toLowerCase()].inverted || false
+    distance = negative !== inverted
+      ? -distance
       : distance
 
     if (this.forceMove) {
-      const accel = (axis.toLowerCase() === 'z')
+      const accel = axis === 'Z'
         ? this.$store.getters['printer/getPrinterSettings']('printer.max_z_accel')
         : this.$store.state.printer.printer.toolhead.max_accel
-      this.sendGcode(`FORCE_MOVE STEPPER=stepper_${axis} DISTANCE=${distance} VELOCITY=${rate} ACCEL=${accel}`)
+      this.sendGcode(`FORCE_MOVE STEPPER=stepper_${axis.toLowerCase()} DISTANCE=${distance} VELOCITY=${rate} ACCEL=${accel}`)
     } else {
-      this.sendGcode(`G91
-      G1 ${axis}${distance} F${rate * 60}
-      G90`)
+      this.sendMoveGcode(
+        {
+          [axis]: distance
+        },
+        rate)
     }
   }
 }

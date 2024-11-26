@@ -2,9 +2,10 @@
   <collapsable-card
     :title="$t('app.general.title.job_queue')"
     icon="$jobQueue"
-    :draggable="!fullScreen"
-    :collapsable="!fullScreen"
+    :draggable="!fullscreen"
+    :collapsable="!fullscreen"
     layout-path="dashboard.job-queue-card"
+    :help-tooltip="$t('app.job_queue.tooltip.help')"
   >
     <template #menu>
       <app-btn-collapse-group :collapsed="menuCollapsed">
@@ -39,21 +40,21 @@
       </app-btn-collapse-group>
 
       <app-btn
-        v-if="!fullScreen"
+        v-if="!fullscreen"
         color=""
         fab
         x-small
         text
         class="ms-1 my-1"
-        @click="$filters.routeTo($router, '/jobs')"
+        @click="$filters.routeTo({ name: 'jobs' })"
       >
         <v-icon>$fullScreen</v-icon>
       </app-btn>
     </template>
 
     <job-queue
-      :dense="!fullScreen"
-      :bulk-actions="fullScreen"
+      :dense="!fullscreen"
+      :bulk-actions="fullscreen"
     />
   </collapsable-card>
 </template>
@@ -62,6 +63,7 @@
 import { Component, Vue, Prop } from 'vue-property-decorator'
 import JobQueue from '@/components/widgets/job-queue/JobQueue.vue'
 import { SocketActions } from '@/api/socketActions'
+import type { QueueState } from '@/store/jobQueue/types'
 
 @Component({
   components: {
@@ -69,13 +71,13 @@ import { SocketActions } from '@/api/socketActions'
   }
 })
 export default class JobQueueCard extends Vue {
-  @Prop({ type: Boolean, default: false })
-  readonly menuCollapsed!: boolean
+  @Prop({ type: Boolean })
+  readonly menuCollapsed?: boolean
 
-  @Prop({ type: Boolean, default: false })
-  readonly fullScreen!: boolean
+  @Prop({ type: Boolean })
+  readonly fullscreen?: boolean
 
-  get queueStatus () {
+  get queueStatus (): QueueState {
     return this.$store.state.jobQueue.queue_state
   }
 

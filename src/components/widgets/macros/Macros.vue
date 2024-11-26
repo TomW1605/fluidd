@@ -46,6 +46,7 @@
             v-for="macro in category.macros"
             :key="`category-${macro.name}`"
             top
+            :disabled="!macro.config.description || macro.config.description === 'G-Code macro'"
           >
             <template #activator="{ on, attrs }">
               <macro-btn
@@ -94,7 +95,7 @@ export default class Macros extends Mixins(StateMixin) {
   }
 
   handleEditCategory () {
-    this.$router.push('/settings/#macros')
+    this.$router.push({ name: 'settings', hash: '#macros' })
   }
 }
 </script>

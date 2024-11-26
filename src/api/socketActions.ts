@@ -3,6 +3,7 @@ import { Globals, Waits } from '@/globals'
 import type { NotifyOptions } from '@/plugins/socketClient'
 import { consola } from 'consola'
 import type { TimelapseWritableSettings } from '@/store/timelapse/types'
+import type { WebcamConfig } from '@/store/webcams/types'
 
 const baseEmit = (method: string, options: NotifyOptions) => {
   if (!Vue.$socket) {
@@ -189,6 +190,46 @@ export const SocketActions = {
     )
   },
 
+  async machinePeripheralsUsb () {
+    baseEmit(
+      'machine.peripherals.usb', {
+        dispatch: 'server/onMachinePeripherals',
+        wait: Waits.onMachinePeripheralsUsb
+      }
+    )
+  },
+
+  async machinePeripheralsSerial () {
+    baseEmit(
+      'machine.peripherals.serial', {
+        dispatch: 'server/onMachinePeripherals',
+        wait: Waits.onMachinePeripheralsSerial
+      }
+    )
+  },
+
+  async machinePeripheralsVideo () {
+    baseEmit(
+      'machine.peripherals.video', {
+        dispatch: 'server/onMachinePeripherals',
+        wait: Waits.onMachinePeripheralsVideo
+      }
+    )
+  },
+
+  async machinePeripheralsCanbus (canbusInterface: string) {
+    const wait = `${Waits.onMachinePeripheralsCanbus}/${canbusInterface}`
+    baseEmit(
+      'machine.peripherals.canbus', {
+        dispatch: 'server/onMachinePeripheralsCanbus',
+        params: {
+          interface: canbusInterface
+        },
+        wait
+      }
+    )
+  },
+
   async machineTimelapseSetSettings (settings: Partial<TimelapseWritableSettings>, wait?: string) {
     baseEmit(
       'machine.timelapse.post_settings', {
@@ -254,7 +295,7 @@ export const SocketActions = {
     )
   },
 
-  async printerObjectsSubscribe (objects: {[key: string]: null}) {
+  async printerObjectsSubscribe (objects: { [key: string]: null }) {
     baseEmit(
       'printer.objects.subscribe', {
         dispatch: 'printer/onPrinterObjectsSubscribe',
@@ -371,7 +412,7 @@ export const SocketActions = {
   /**
    * Writes data to moonraker's DB.
    */
-  async serverWrite (key: string, value: any, namespace: string = Globals.MOONRAKER_DB.fluidd.NAMESPACE) {
+  async serverWrite (key: string, value: unknown, namespace: string = Globals.MOONRAKER_DB.fluidd.NAMESPACE) {
     baseEmit(
       'server.database.post_item', {
         params: {
@@ -704,6 +745,24 @@ export const SocketActions = {
     )
   },
 
+  async serverWebcamsWrite (webcam: WebcamConfig) {
+    baseEmit(
+      'server.webcams.post_item', {
+        params: webcam
+      }
+    )
+  },
+
+  async serverWebcamsDelete (uid: string) {
+    baseEmit(
+      'server.webcams.delete_item', {
+        params: {
+          uid
+        }
+      }
+    )
+  },
+
   async serverSensorsList () {
     baseEmit(
       'server.sensors.list', {
@@ -734,7 +793,8 @@ export const SocketActions = {
       'server.spoolman.proxy', {
         params: {
           request_method: 'GET',
-          path: '/v1/spool'
+          path: '/v1/spool',
+          use_v2_response: true
         },
         dispatch: 'spoolman/onAvailableSpools'
       }

@@ -3,12 +3,12 @@
     app
     clipped-left
     extension-height="46"
-    :color="theme.currentTheme.appbar"
+    :color="$vuetify.theme.currentTheme.appbar"
     :height="$globals.HEADER_HEIGHT"
   >
     <router-link
-      v-show="!isMobileViewport"
-      to="/"
+      v-if="!isMobileViewport"
+      :to="{ name: 'home' }"
       class="toolbar-logo"
     >
       <app-icon />
@@ -29,7 +29,7 @@
 
       <v-toolbar-title class="printer-title text--secondary">
         <router-link
-          to="/"
+          :to="{ name: 'home' }"
           v-html="instanceName"
         />
       </v-toolbar-title>
@@ -65,7 +65,13 @@
               </v-icon>
             </app-btn>
           </template>
-          <span>{{ $t('app.general.tooltip.estop') }}</span>
+          <span>
+            {{ $t('app.general.tooltip.estop') }}
+            <template v-if="enableKeyboardShortcuts">
+              <br>
+              <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>e</kbd>
+            </template>
+          </span>
         </v-tooltip>
       </div>
 
@@ -214,16 +220,8 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
     return this.$store.getters['server/componentSupport']('authorization')
   }
 
-  get instances () {
-    return this.$store.state.config.instances
-  }
-
-  get instanceName () {
+  get instanceName (): string {
     return this.$store.state.config.uiSettings.general.instanceName
-  }
-
-  get currentFile () {
-    return this.$store.state.printer.printer.print_stats.filename
   }
 
   get hasUpdates () {
@@ -243,21 +241,18 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
       return false
     }
 
-    if (!this.ignoreDefaultBedMeshPendingConfigurationChanges) {
-      return true
-    }
+    const sectionsToIgnore = this.sectionsToIgnorePendingConfigurationChanges
 
-    const saveConfigPendingItemsKeys = Object.keys(this.saveConfigPendingItems)
-
-    return saveConfigPendingItemsKeys.length > 1 || saveConfigPendingItemsKeys[0] !== 'bed_mesh default'
+    return (
+      sectionsToIgnore.length === 0 ||
+      Object.keys(this.saveConfigPendingItems)
+        .filter(key => !sectionsToIgnore.includes(key))
+        .length > 0
+    )
   }
 
   get devicePowerComponentEnabled () {
     return this.$store.getters['server/componentSupport']('power')
-  }
-
-  get theme () {
-    return this.$store.getters['config/getTheme']
   }
 
   get inLayout (): boolean {
@@ -265,11 +260,11 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
   }
 
   get showSaveConfigAndRestart (): boolean {
-    return this.$store.state.config.uiSettings.general.showSaveConfigAndRestart as boolean
+    return this.$store.state.config.uiSettings.general.showSaveConfigAndRestart
   }
 
-  get ignoreDefaultBedMeshPendingConfigurationChanges (): boolean {
-    return this.$store.state.config.uiSettings.general.ignoreDefaultBedMeshPendingConfigurationChanges as boolean
+  get sectionsToIgnorePendingConfigurationChanges (): string[] {
+    return this.$store.state.config.uiSettings.general.sectionsToIgnorePendingConfigurationChanges
   }
 
   get showUploadAndPrint (): boolean {
@@ -277,7 +272,7 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
   }
 
   get topNavPowerToggle () {
-    const topNavPowerToggle = this.$store.state.config.uiSettings.general.topNavPowerToggle as string | null
+    const topNavPowerToggle: string | null = this.$store.state.config.uiSettings.general.topNavPowerToggle
 
     if (!topNavPowerToggle) return null
 
@@ -338,6 +333,10 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
     return true
   }
 
+  get enableKeyboardShortcuts (): boolean {
+    return this.$store.state.config.uiSettings.general.enableKeyboardShortcuts
+  }
+
   handleExitLayout () {
     this.$store.commit('config/setLayoutMode', false)
   }
@@ -389,16 +388,17 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
 
     if (!device) return
 
-    const confirmOnPowerDeviceChange = this.$store.state.config.uiSettings.general.confirmOnPowerDeviceChange
-    let res: boolean | undefined = true
-    if (confirmOnPowerDeviceChange) {
-      res = await this.$confirm(
+    const confirmOnPowerDeviceChange: boolean = this.$store.state.config.uiSettings.general.confirmOnPowerDeviceChange
+
+    const result = (
+      !confirmOnPowerDeviceChange ||
+      await this.$confirm(
         this.$tc('app.general.simple_form.msg.confirm_power_device_toggle'),
         { title: this.$tc('app.general.label.confirm'), color: 'card-heading', icon: '$error' }
       )
-    }
+    )
 
-    if (res) {
+    if (result) {
       switch (type) {
         case 'moonraker': {
           const state = (device.status === 'on') ? 'off' : 'on'
@@ -421,7 +421,7 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
 
   saveConfigAndRestart (force = false) {
     if (!force) {
-      const confirmOnSaveConfigAndRestart = this.$store.state.config.uiSettings.general.confirmOnSaveConfigAndRestart
+      const confirmOnSaveConfigAndRestart: boolean = this.$store.state.config.uiSettings.general.confirmOnSaveConfigAndRestart
 
       if (confirmOnSaveConfigAndRestart) {
         this.pendingChangesDialogOpen = true

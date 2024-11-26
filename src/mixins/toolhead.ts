@@ -4,15 +4,30 @@ import type { Extruder } from '@/store/printer/types'
 
 @Component
 export default class ToolheadMixin extends Vue {
+  get hasExtruder (): boolean {
+    return this.$store.getters['printer/getHasExtruder'] as boolean
+  }
+
+  get hasMultipleExtruders (): boolean {
+    return this.$store.getters['printer/getHasMultipleExtruders'] as boolean
+  }
+
   get activeExtruder (): Extruder | undefined {
     return this.$store.getters['printer/getActiveExtruder'] as Extruder | undefined
   }
 
   get extruderReady (): boolean {
-    const extruder = this.activeExtruder
-    return (extruder && extruder.temperature >= 0 && extruder.min_extrude_temp >= 0)
-      ? (extruder.temperature >= extruder.min_extrude_temp)
-      : false
+    const activeExtruder = this.activeExtruder
+
+    return (
+      activeExtruder?.can_extrude ??
+      (
+        activeExtruder !== undefined &&
+        activeExtruder.temperature >= 0 &&
+        activeExtruder.min_extrude_temp >= 0 &&
+        activeExtruder.temperature >= activeExtruder.min_extrude_temp
+      )
+    )
   }
 
   get filamentDiameter (): number {
@@ -63,15 +78,15 @@ export default class ToolheadMixin extends Vue {
     return !!this.$store.getters['printer/getPrinterSettings']('stepper_z1') as boolean
   }
 
-  get hasHomingOverride (): boolean {
-    return this.$store.getters['printer/getHasHomingOverride'] as boolean
-  }
-
   get isManualProbeActive (): boolean {
     return this.$store.getters['printer/getIsManualProbeActive'] as boolean
   }
 
   get isBedScrewsAdjustActive (): boolean {
     return this.$store.getters['printer/getIsBedScrewsAdjustActive'] as boolean
+  }
+
+  get hasScrewsTiltAdjustResults (): boolean {
+    return this.$store.getters['printer/getHasScrewsTiltAdjustResults'] as boolean
   }
 }

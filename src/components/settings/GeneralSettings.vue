@@ -66,21 +66,21 @@
 
       <v-divider />
 
-      <app-setting :title="$t('app.setting.label.text_sort_order')">
-        <v-select
-          v-model="textSortOrder"
-          filled
-          dense
-          hide-details="auto"
-          :items="availableTextSortOrders"
+      <app-setting
+        :title="$t('app.setting.label.keyboard_shortcuts')"
+        :sub-title="$t('app.setting.tooltip.keyboard_shortcuts')"
+      >
+        <v-switch
+          v-model="enableKeyboardShortcuts"
+          hide-details
+          class="mb-5"
+          @click.native.stop
         />
       </app-setting>
 
       <v-divider />
 
-      <app-setting
-        :title="$t('app.setting.label.confirm_on_estop')"
-      >
+      <app-setting :title="$t('app.setting.label.confirm_on_estop')">
         <v-switch
           v-model="confirmOnEstop"
           hide-details
@@ -91,9 +91,7 @@
 
       <v-divider />
 
-      <app-setting
-        :title="$t('app.setting.label.show_upload_and_print')"
-      >
+      <app-setting :title="$t('app.setting.label.show_upload_and_print')">
         <v-switch
           v-model="showUploadAndPrint"
           hide-details
@@ -104,9 +102,7 @@
 
       <v-divider />
 
-      <app-setting
-        :title="$t('app.setting.label.power_toggle_in_top_nav')"
-      >
+      <app-setting :title="$t('app.setting.label.power_toggle_in_top_nav')">
         <v-select
           v-model="topNavPowerToggle"
           filled
@@ -119,9 +115,7 @@
 
       <v-divider />
 
-      <app-setting
-        :title="$t('app.setting.label.confirm_on_power_device_change')"
-      >
+      <app-setting :title="$t('app.setting.label.confirm_on_power_device_change')">
         <v-switch
           v-model="confirmOnPowerDeviceChange"
           hide-details
@@ -132,9 +126,7 @@
 
       <v-divider />
 
-      <app-setting
-        :title="$t('app.setting.label.show_save_config_and_restart')"
-      >
+      <app-setting :title="$t('app.setting.label.show_save_config_and_restart')">
         <v-switch
           v-model="showSaveConfigAndRestart"
           hide-details
@@ -146,9 +138,7 @@
       <template v-if="showSaveConfigAndRestart">
         <v-divider />
 
-        <app-setting
-          :title="$t('app.setting.label.confirm_on_save_config_and_restart')"
-        >
+        <app-setting :title="$t('app.setting.label.confirm_on_save_config_and_restart')">
           <v-switch
             v-model="confirmOnSaveConfigAndRestart"
             hide-details
@@ -156,20 +146,76 @@
             @click.native.stop
           />
         </app-setting>
+      </template>
 
+      <template v-if="showSaveConfigAndRestart && confirmOnSaveConfigAndRestart">
         <v-divider />
 
-        <app-setting
-          :title="$t('app.setting.label.ignore_default_bed_mesh_pending_configuration_changes')"
-        >
-          <v-switch
-            v-model="ignoreDefaultBedMeshPendingConfigurationChanges"
-            hide-details
-            class="mb-5"
-            @click.native.stop
+        <app-setting :title="$t('app.setting.label.sections_to_ignore_pending_configuration_changes')">
+          <v-combobox
+            v-model="sectionsToIgnorePendingConfigurationChanges"
+            :items="['bed_mesh default', 'bed_tilt']"
+            filled
+            dense
+            hide-selected
+            hide-details="auto"
+            multiple
+            small-chips
+            append-icon=""
+            deletable-chips
           />
         </app-setting>
       </template>
+
+      <v-divider />
+
+      <app-setting :title="$t('app.setting.label.print_in_progress_layout')">
+        <v-select
+          v-model="printInProgressLayout"
+          filled
+          dense
+          hide-details="auto"
+          :items="availablePrintInProgressLayouts"
+        />
+      </app-setting>
+
+      <v-divider />
+
+      <app-setting
+        :title="$t('app.setting.label.print_progress_calculation')"
+        :sub-title="$t('app.setting.tooltip.average_calculation')"
+      >
+        <v-select
+          v-model="printProgressCalculation"
+          multiple
+          filled
+          dense
+          hide-details="auto"
+          :rules="[
+            $rules.lengthGreaterThanOrEqual(1),
+          ]"
+          :items="availablePrintProgressCalculation"
+        />
+      </app-setting>
+
+      <v-divider />
+
+      <app-setting
+        :title="$t('app.setting.label.print_eta_calculation')"
+        :sub-title="$t('app.setting.tooltip.average_calculation')"
+      >
+        <v-select
+          v-model="printEtaCalculation"
+          multiple
+          filled
+          dense
+          hide-details="auto"
+          :rules="[
+            $rules.lengthGreaterThanOrEqual(1),
+          ]"
+          :items="availablePrintEtaCalculation"
+        />
+      </app-setting>
 
       <v-divider />
 
@@ -183,7 +229,38 @@
           class="mt-0 mb-4"
         />
       </app-setting>
+
+      <v-divider />
+
+      <app-setting :title="$t('app.setting.label.fluidd_settings_in_moonraker_db')">
+        <app-btn
+          outlined
+          small
+          color="primary"
+          class="mr-2"
+          @click="handleBackupSettings"
+        >
+          {{ $t('app.setting.btn.backup') }}
+        </app-btn>
+
+        <app-btn
+          outlined
+          small
+          color="primary"
+          @click="uploadSettingsFile.click()"
+        >
+          {{ $t('app.setting.btn.restore') }}
+        </app-btn>
+      </app-setting>
     </v-card>
+
+    <input
+      ref="uploadSettingsFile"
+      type="file"
+      accept=".json"
+      style="display: none"
+      @change="handleRestoreSettings"
+    >
   </div>
 </template>
 
@@ -194,6 +271,12 @@ import type { VInput } from '@/types'
 import { SupportedLocales, DateFormats, TimeFormats } from '@/globals'
 import type { OutputPin } from '@/store/printer/types'
 import type { Device } from '@/store/power/types'
+import type { PrintEtaCalculation, PrintInProgressLayout, PrintProgressCalculation } from '@/store/config/types'
+import { httpClientActions } from '@/api/httpClientActions'
+import consola from 'consola'
+import { readFileAsTextAsync } from '@/util/file-system-entry'
+import { EventBus } from '@/eventBus'
+import { isFluiddContent, toFluiddContent } from '@/util/fluidd-content'
 
 @Component({
   components: {}
@@ -202,16 +285,10 @@ export default class GeneralSettings extends Mixins(StateMixin) {
   @Ref('instanceName')
   readonly instanceNameElement!: VInput
 
-  get estimateTypes () {
-    return [
-      { name: this.$t('app.setting.timer_options.duration'), value: 'totals' },
-      { name: this.$t('app.setting.timer_options.slicer'), value: 'slicer' },
-      { name: this.$t('app.setting.timer_options.file'), value: 'file' },
-      { name: this.$t('app.setting.timer_options.filament'), value: 'filament' }
-    ]
-  }
+  @Ref('uploadSettingsFile')
+  readonly uploadSettingsFile!: HTMLInputElement
 
-  get instanceName () {
+  get instanceName (): string {
     return this.$store.state.config.uiSettings.general.instanceName
   }
 
@@ -219,7 +296,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     if (this.instanceNameElement.valid) this.$store.dispatch('config/updateInstance', value)
   }
 
-  get locale () {
+  get locale (): string {
     return this.$store.state.config.uiSettings.general.locale
   }
 
@@ -234,7 +311,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     this.$store.dispatch('config/onLocaleChange', value)
   }
 
-  get dateFormat () {
+  get dateFormat (): string {
     return this.$store.state.config.uiSettings.general.dateFormat
   }
 
@@ -252,11 +329,11 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     return Object.entries(DateFormats)
       .map(([key, entry]) => ({
         value: key,
-        text: `${date.toLocaleDateString(entry.locale ?? this.$i18n.locale, entry.options)}${entry.suffix ?? ''}`
+        text: `${date.toLocaleDateString(entry.locales ?? this.$filters.getAllLocales(), entry.options)}${entry.suffix ?? ''}`
       }))
   }
 
-  get timeFormat () {
+  get timeFormat (): string {
     return this.$store.state.config.uiSettings.general.timeFormat
   }
 
@@ -274,40 +351,23 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     return Object.entries(TimeFormats)
       .map(([key, entry]) => ({
         value: key,
-        text: `${date.toLocaleTimeString(entry.locale ?? this.$i18n.locale, entry.options)}${entry.suffix ?? ''}`
+        text: `${date.toLocaleTimeString(entry.locales ?? this.$filters.getAllLocales(), entry.options)}${entry.suffix ?? ''}`
       }))
   }
 
-  get textSortOrder () {
-    return this.$store.state.config.uiSettings.general.textSortOrder
+  get enableKeyboardShortcuts (): boolean {
+    return this.$store.state.config.uiSettings.general.enableKeyboardShortcuts
   }
 
-  set textSortOrder (value: string) {
+  set enableKeyboardShortcuts (value: boolean) {
     this.$store.dispatch('config/saveByPath', {
-      path: 'uiSettings.general.textSortOrder',
+      path: 'uiSettings.general.enableKeyboardShortcuts',
       value,
       server: true
     })
   }
 
-  get availableTextSortOrders () {
-    return [
-      {
-        value: 'default',
-        text: this.$t('app.general.label.default')
-      },
-      {
-        value: 'numeric-prefix',
-        text: this.$t('app.general.label.numeric_prefix_sort')
-      },
-      {
-        value: 'version',
-        text: this.$t('app.general.label.version_sort')
-      }
-    ]
-  }
-
-  get confirmOnEstop () {
+  get confirmOnEstop (): boolean {
     return this.$store.state.config.uiSettings.general.confirmOnEstop
   }
 
@@ -319,11 +379,11 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     })
   }
 
-  get topNavPowerToggle () {
+  get topNavPowerToggle (): string | null {
     return this.$store.state.config.uiSettings.general.topNavPowerToggle
   }
 
-  set topNavPowerToggle (value: string) {
+  set topNavPowerToggle (value: string | null) {
     this.$store.dispatch('config/saveByPath', {
       path: 'uiSettings.general.topNavPowerToggle',
       value,
@@ -354,7 +414,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     ]
   }
 
-  get confirmOnPowerDeviceChange () {
+  get confirmOnPowerDeviceChange (): boolean {
     return this.$store.state.config.uiSettings.general.confirmOnPowerDeviceChange
   }
 
@@ -366,7 +426,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     })
   }
 
-  get showSaveConfigAndRestart () {
+  get showSaveConfigAndRestart (): boolean {
     return this.$store.state.config.uiSettings.general.showSaveConfigAndRestart
   }
 
@@ -378,7 +438,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     })
   }
 
-  get showUploadAndPrint () {
+  get showUploadAndPrint (): boolean {
     return this.$store.state.config.uiSettings.general.showUploadAndPrint
   }
 
@@ -391,7 +451,7 @@ export default class GeneralSettings extends Mixins(StateMixin) {
   }
 
   get confirmOnSaveConfigAndRestart (): boolean {
-    return this.$store.state.config.uiSettings.general.confirmOnSaveConfigAndRestart as boolean
+    return this.$store.state.config.uiSettings.general.confirmOnSaveConfigAndRestart
   }
 
   set confirmOnSaveConfigAndRestart (value: boolean) {
@@ -402,19 +462,102 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     })
   }
 
-  get ignoreDefaultBedMeshPendingConfigurationChanges (): boolean {
-    return this.$store.state.config.uiSettings.general.ignoreDefaultBedMeshPendingConfigurationChanges as boolean
+  get sectionsToIgnorePendingConfigurationChanges (): string[] {
+    return this.$store.state.config.uiSettings.general.sectionsToIgnorePendingConfigurationChanges
   }
 
-  set ignoreDefaultBedMeshPendingConfigurationChanges (value: boolean) {
+  set sectionsToIgnorePendingConfigurationChanges (value: string[]) {
     this.$store.dispatch('config/saveByPath', {
-      path: 'uiSettings.general.ignoreDefaultBedMeshPendingConfigurationChanges',
+      path: 'uiSettings.general.sectionsToIgnorePendingConfigurationChanges',
+      value: [...new Set(value)].sort((a, b) => a.localeCompare(b)),
+      server: true
+    })
+  }
+
+  get printInProgressLayout (): PrintInProgressLayout {
+    return this.$store.state.config.uiSettings.general.printInProgressLayout
+  }
+
+  set printInProgressLayout (value: PrintInProgressLayout) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.printInProgressLayout',
       value,
       server: true
     })
   }
 
-  get enableDiagnostics () {
+  get availablePrintInProgressLayouts () {
+    return [
+      {
+        value: 'default',
+        text: this.$t('app.general.label.default')
+      },
+      {
+        value: 'compact',
+        text: this.$t('app.general.label.compact')
+      }
+    ]
+  }
+
+  get availablePrintProgressCalculation () {
+    return [
+      {
+        value: 'file',
+        text: this.$t('app.setting.timer_options.relative_file_position')
+      },
+      {
+        value: 'fileAbsolute',
+        text: this.$t('app.setting.timer_options.absolute_file_position')
+      },
+      {
+        value: 'slicer',
+        text: this.$t('app.setting.timer_options.slicer_m73')
+      },
+      {
+        value: 'filament',
+        text: this.$t('app.setting.timer_options.filament')
+      }
+    ]
+  }
+
+  get printProgressCalculation (): PrintProgressCalculation[] {
+    return this.$store.state.config.uiSettings.general.printProgressCalculation
+  }
+
+  set printProgressCalculation (value: PrintProgressCalculation[]) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.printProgressCalculation',
+      value,
+      server: true
+    })
+  }
+
+  get availablePrintEtaCalculation () {
+    return [
+      {
+        value: 'file',
+        text: this.$t('app.setting.timer_options.file')
+      },
+      {
+        value: 'slicer',
+        text: this.$t('app.setting.timer_options.slicer')
+      }
+    ]
+  }
+
+  get printEtaCalculation (): PrintEtaCalculation[] {
+    return this.$store.state.config.uiSettings.general.printEtaCalculation
+  }
+
+  set printEtaCalculation (value: PrintEtaCalculation[]) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.printEtaCalculation',
+      value,
+      server: true
+    })
+  }
+
+  get enableDiagnostics (): boolean {
     return this.$store.state.config.uiSettings.general.enableDiagnostics
   }
 
@@ -426,8 +569,65 @@ export default class GeneralSettings extends Mixins(StateMixin) {
     })
   }
 
-  get current_time () {
-    return Math.floor(Date.now() / 1000)
+  async handleBackupSettings () {
+    try {
+      const response = await httpClientActions.serverDatabaseItemGet('fluidd')
+
+      const data = response.data?.result?.value
+
+      if (data) {
+        const backupData = toFluiddContent('settings-backup', data)
+        const backupDataAsString = JSON.stringify(backupData)
+
+        const link = document.createElement('a')
+
+        link.href = `data:text/plain;charset=utf-8,${encodeURIComponent(backupDataAsString)}`
+        link.download = `backup-fluidd-v${import.meta.env.VERSION}-${this.instanceName}.json`
+        link.target = '_blank'
+
+        document.body.appendChild(link)
+
+        link.click()
+
+        document.body.removeChild(link)
+      }
+    } catch (e) {
+      consola.error('[Settings] backup failed', e)
+
+      EventBus.$emit(this.$t('app.general.msg.fluidd_settings_backup_failed').toString(), { type: 'error' })
+    }
+  }
+
+  async handleRestoreSettings () {
+    try {
+      if (this.uploadSettingsFile?.files?.length === 1) {
+        const backupDataAsString = await readFileAsTextAsync(this.uploadSettingsFile.files[0])
+
+        if (backupDataAsString) {
+          const backupData = JSON.parse(backupDataAsString)
+
+          if (
+            !isFluiddContent<Record<string, unknown>>('settings-backup', backupData)
+          ) {
+            EventBus.$emit(this.$t('app.general.msg.not_valid_fluidd_backup_file').toString(), { type: 'error' })
+
+            return
+          }
+
+          for (const key in backupData.data) {
+            await httpClientActions.serverDatabaseItemPost('fluidd', key, backupData.data[key])
+          }
+
+          window.location.reload()
+        }
+      }
+    } catch (e) {
+      consola.error('[Settings] restore failed', e)
+
+      EventBus.$emit(this.$t('app.general.msg.fluidd_settings_restore_failed').toString(), { type: 'error' })
+    } finally {
+      this.uploadSettingsFile.value = ''
+    }
   }
 }
 </script>

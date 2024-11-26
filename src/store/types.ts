@@ -17,9 +17,11 @@ import type { NotificationsState } from './notifications/types'
 import type { AnnouncementsState } from './announcements/types'
 import type { AuthState } from './auth/types'
 import type { TimelapseState } from '@/store/timelapse/types'
-import type { CamerasState } from './cameras/types'
 import type { WaitState } from './wait/types'
 import type { WebcamsState } from './webcams/types'
+import type { JobQueueState } from './jobQueue/types'
+import type { SpoolmanState } from './spoolman/types'
+import type { MoonrakerSensorsState } from './sensors/types'
 
 export interface RootState {
   socket: SocketState;
@@ -35,7 +37,6 @@ export interface RootState {
   power: DevicePowerState;
   history: HistoryState;
   version: VersionState;
-  cameras: CamerasState;
   mesh: MeshState;
   notifications: NotificationsState;
   announcements: AnnouncementsState;
@@ -44,4 +45,7 @@ export interface RootState {
   timelapse: TimelapseState;
   parts: PartsState;
   webcams: WebcamsState;
+  jobQueue: JobQueueState;
+  spoolman: SpoolmanState;
+  sensors: MoonrakerSensorsState;
 }

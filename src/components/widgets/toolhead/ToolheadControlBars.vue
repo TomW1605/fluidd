@@ -14,7 +14,7 @@
           :loading="hasWait($waits.onHomeAll)"
           :color="!allHomed ? 'primary' : undefined"
           class="px-2 mr-2"
-          @click="sendGcode('G28', $waits.onHomeAll)"
+          @click="homeAll"
         >
           <v-icon
             small
@@ -75,7 +75,7 @@ export default class ToolheadControlBars extends Mixins(StateMixin, ToolheadMixi
   }
 
   get forceMove (): boolean {
-    return this.$store.state.config.uiSettings.toolhead.forceMove as boolean
+    return this.$store.state.config.uiSettings.toolhead.forceMove
   }
 }
 </script>

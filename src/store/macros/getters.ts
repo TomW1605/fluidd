@@ -2,6 +2,15 @@ import type { GetterTree } from 'vuex'
 import type { Macro, MacrosState } from './types'
 import type { RootState } from '../types'
 
+export const MACRO_DEFAULTS = {
+  alias: '',
+  visible: true,
+  disabledWhilePrinting: false,
+  color: '',
+  categoryId: '0',
+  order: undefined
+}
+
 export const getters: GetterTree<MacrosState, RootState> = {
 
   /**
@@ -10,7 +19,7 @@ export const getters: GetterTree<MacrosState, RootState> = {
    */
   getMacros: (state, getters, rootState) => {
     const macros = Object.keys(rootState.printer.printer)
-      .filter(key => /^gcode_macro (?!_)/.test(key))
+      .filter(key => key.startsWith('gcode_macro '))
       .map(key => {
         const lowerCaseKey = key.toLocaleLowerCase()
         const name = lowerCaseKey.split(' ', 2)[1]
@@ -19,15 +28,11 @@ export const getters: GetterTree<MacrosState, RootState> = {
         const variables = rootState.printer.printer[key]
 
         const macro: Macro = {
+          ...MACRO_DEFAULTS,
           name,
-          alias: '',
-          visible: true,
-          disabledWhilePrinting: false,
-          color: '',
-          categoryId: '0',
-          variables,
           ...stored,
-          ...{ config }
+          variables,
+          config
         }
 
         // Handle categories, incl those that no longer exist.
@@ -47,10 +52,16 @@ export const getters: GetterTree<MacrosState, RootState> = {
     return macros
   },
 
-  getMacroByName: (state, getters) => (name: string) => {
+  getMacroByName: (state, getters) => (...names: string[]) => {
     const macros = getters.getMacros as Macro[]
 
-    return macros.find(macro => macro.name === name)
+    for (const name of names) {
+      const macro = macros.find(macro => macro.name === name)
+
+      if (macro) {
+        return macro
+      }
+    }
   },
 
   // Gets visible macros, transformed. Should include the macro's config.
@@ -60,13 +71,11 @@ export const getters: GetterTree<MacrosState, RootState> = {
     const categories = [...state.categories, defaultCategory]
 
     return categories
-      .map(({ id, name }) => {
-        return {
-          id,
-          name,
-          macros: getters.getMacrosByCategory(id).filter((macro: Macro) => macro.visible)
-        }
-      })
+      .map(({ id, name }) => ({
+        id,
+        name,
+        macros: getters.getMacrosByCategory(id).filter((macro: Macro) => macro.visible) as Macro[]
+      }))
       .filter(category => category.macros.length > 0)
       .sort((a, b) => {
         if (!a.name) return 1
@@ -88,7 +97,10 @@ export const getters: GetterTree<MacrosState, RootState> = {
     const macros = getters.getMacros as Macro[]
 
     return macros
-      .filter(macro => macro.categoryId === id)
+      .filter(macro => (
+        !macro.name.startsWith('_') &&
+        macro.categoryId === id
+      ))
       .sort((a: Macro, b: Macro) => {
         // Sorts preferrentially by order, then by name
         // This offers backward compatibility with macros that have no order

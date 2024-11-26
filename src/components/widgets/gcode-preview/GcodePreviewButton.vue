@@ -7,10 +7,10 @@
         small
         tabindex="-1"
         :disabled="disabled"
-        :color="property ? 'primary' : undefined"
+        :color="inputValue ? 'primary' : undefined"
         :retain-focus-on-click="!isMobileViewport"
         v-on="on"
-        @click="property = !property"
+        @click="inputValue = !inputValue"
       >
         <v-icon>{{ icon }}</v-icon>
       </v-btn>
@@ -20,13 +20,13 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Mixins } from 'vue-property-decorator'
+import { Component, Prop, Mixins, VModel } from 'vue-property-decorator'
 import BrowserMixin from '@/mixins/browser'
 
 @Component({})
 export default class GcodePreviewButton extends Mixins(BrowserMixin) {
-  @Prop({ type: String, required: true })
-  readonly name!: string
+  @VModel({ type: Boolean })
+  inputValue?: boolean
 
   @Prop({ type: String, required: true })
   readonly icon!: string
@@ -34,15 +34,7 @@ export default class GcodePreviewButton extends Mixins(BrowserMixin) {
   @Prop({ type: String, required: true })
   readonly tooltip!: string
 
-  @Prop({ type: Boolean, default: false })
-  readonly disabled!: boolean
-
-  get property () {
-    return this.$store.getters['gcodePreview/getViewerOption'](this.name)
-  }
-
-  set property (value) {
-    this.$store.commit('gcodePreview/setViewerState', { [this.name]: value })
-  }
+  @Prop({ type: Boolean })
+  readonly disabled?: boolean
 }
 </script>

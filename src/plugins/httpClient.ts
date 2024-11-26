@@ -3,8 +3,10 @@ import { EventBus } from '@/eventBus'
 import { consola } from 'consola'
 import axios, { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import { Globals } from '@/globals'
+import type { Store } from 'vuex'
+import type { RootState } from '@/store/types'
 
-const createHttpClient = (store: any) => {
+const createHttpClient = (store: Store<RootState>) => {
   // Create a base instance with sane defaults.
   const httpClient = axios.create({
     withAuth: true,
@@ -73,7 +75,7 @@ const createHttpClient = (store: any) => {
     return response
   }
 
-  const errorInterceptor = (error: AxiosError<string | { error?: { message?: string} } | undefined>) => {
+  const errorInterceptor = async (error: AxiosError<string | { error?: { message?: string } } | undefined>) => {
     let message: string | undefined
 
     // Check if its a network / server error.
@@ -81,7 +83,7 @@ const createHttpClient = (store: any) => {
     // Network / Server Error.
       if (error.message) message = error.message
       consola.debug(message || 'Network error')
-      return Promise.reject(error)
+      throw error
     }
 
     // All other errors
@@ -107,7 +109,7 @@ const createHttpClient = (store: any) => {
       case 401:
         if (error.config?.withAuth) {
         // logout.
-          store.dispatch('auth/logout')
+          await store.dispatch('auth/logout')
         }
         break
       case 404:
@@ -119,7 +121,7 @@ const createHttpClient = (store: any) => {
         EventBus.$emit(message || 'Server error', { type: 'error' })
     }
 
-    return Promise.reject(error)
+    throw error
   }
 
   httpClient.interceptors.request.use(requestInterceptor, errorInterceptor)
@@ -138,11 +140,19 @@ declare module 'axios' {
 }
 
 export const HttpClientPlugin = {
-  install (Vue: typeof _Vue, options?: any) {
+  install (Vue: typeof _Vue, options?: HttpClientPluginOptions) {
+    if (!options?.store) {
+      throw new Error('store is required')
+    }
+
     const httpClient = createHttpClient(options.store)
     Vue.prototype.$httpClient = httpClient
     Vue.$httpClient = httpClient
   }
+}
+
+interface HttpClientPluginOptions {
+  store?: Store<RootState>
 }
 
 declare module 'vue/types/vue' {

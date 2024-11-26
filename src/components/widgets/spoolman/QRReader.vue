@@ -46,16 +46,20 @@ export default class QRReader extends Mixins(StateMixin, BrowserMixin) {
   context!: CanvasRenderingContext2D
 
   @VModel({ type: String, default: null })
-    source!: null | string
+  source!: null | string
 
   @Ref('canvas')
-    canvas!: HTMLCanvasElement
+  canvas!: HTMLCanvasElement
 
   get camera () {
     if (this.source === 'device') {
-      return { name: this.$t('app.spoolman.label.device_camera'), service: 'device' }
+      return {
+        name: this.$t('app.spoolman.label.device_camera').toString(),
+        service: 'device'
+      }
     }
-    return this.$store.getters['cameras/getCameraById'](this.source)
+
+    return this.$store.getters['webcams/getWebcamById'](this.source)
   }
 
   get open () {

@@ -104,7 +104,6 @@
 import { Component, Vue } from 'vue-property-decorator'
 import { appInit } from '@/init'
 import { consola } from 'consola'
-import type { InitConfig } from '@/store/config/types'
 
 @Component({})
 export default class Login extends Vue {
@@ -126,7 +125,7 @@ export default class Login extends Vue {
     this.loading = true
     try {
       await this.$store.dispatch('auth/login', { username: this.username, password: this.password, source: this.source })
-    } catch (err) {
+    } catch {
       this.error = true
     }
     this.loading = false
@@ -134,14 +133,14 @@ export default class Login extends Vue {
     // Re-init the app.
     if (!this.error) {
       const instance = this.$store.getters['config/getCurrentInstance']
-      appInit(instance, this.$store.state.config.hostConfig)
-        .then((config: InitConfig) => {
-          // Reconnect the socket with the new instance url.
-          if (config.apiConnected && config.apiAuthenticated) {
-            consola.debug('Activating socket with config', config)
-            this.$socket.connect(config.apiConfig.socketUrl)
-          }
-        })
+
+      const config = await appInit(instance, this.$store.state.config.hostConfig)
+
+      // Reconnect the socket with the new instance url.
+      if (config.apiConnected && config.apiAuthenticated) {
+        consola.debug('Activating socket with config', config)
+        this.$socket.connect(config.apiConfig.socketUrl)
+      }
     }
   }
 }

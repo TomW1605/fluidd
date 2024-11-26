@@ -1,7 +1,3 @@
-/* eslint-disable lines-between-class-members */
-/* eslint-disable no-unused-expressions */
-/* eslint-disable array-callback-return */
-
 /**
  * Taken from https://github.com/DimanVorosh/vue-json-rpc-websocket/blob/master/src/wsClient.js
  * and refactored.
@@ -9,9 +5,11 @@
 import _Vue from 'vue'
 import { Globals } from '@/globals'
 import { consola } from 'consola'
-import { camelCase } from 'lodash-es'
+import { camelCase, mergeWith } from 'lodash-es'
 import { httpClientActions } from '@/api/httpClientActions'
-import deepMerge from 'deepmerge'
+import type { Store } from 'vuex'
+import type { RootState } from '@/store/types'
+import axios from 'axios'
 
 export class WebSocketClient {
   url = ''
@@ -26,8 +24,7 @@ export class WebSocketClient {
   pingTimeout: any
   cache: CachedParams | null = null
 
-  constructor (options: Options) {
-    this.url = options.url
+  constructor (options: SocketPluginOptions) {
     this.reconnectEnabled = options.reconnectEnabled || false
     this.reconnectInterval = options.reconnectInterval || 1000
     this.store = options.store ? options.store : null
@@ -73,123 +70,129 @@ export class WebSocketClient {
     if (url) this.url = url
     this.cache = null
 
-    await httpClientActions.accessOneshotTokenGet()
-      .then(response => response.data.result)
-      .then(token => {
-        // Good. Move on with setting up the socket.
-        if (this.store) this.store.dispatch('socket/onSocketConnecting', true)
-        this.connection = new WebSocket(`${this.url}?token=${token}`)
+    try {
+      const response = await httpClientActions.accessOneshotTokenGet()
 
-        this.connection.onopen = () => {
-          if (this.reconnectEnabled) {
-            this.reconnectCount = 1
-          }
-          if (this.store) {
-            this.store.dispatch('socket/onSocketConnecting', false)
-            this.store.dispatch('socket/onSocketOpen', true)
-          }
+      const token = response.data.result
+
+      // Good. Move on with setting up the socket.
+      if (this.store) this.store.dispatch('socket/onSocketConnecting', true)
+      this.connection = new WebSocket(`${this.url}?token=${token}`)
+
+      this.connection.onopen = () => {
+        if (this.reconnectEnabled) {
+          this.reconnectCount = 1
+        }
+        if (this.store) {
+          this.store.dispatch('socket/onSocketConnecting', false)
+          this.store.dispatch('socket/onSocketOpen', true)
+        }
+      }
+
+      this.connection.onclose = (event) => {
+        consola.debug(`${this.logPrefix} Connection closed:`, event)
+        clearTimeout(this.pingTimeout)
+        if (this.store) this.store.dispatch('socket/onSocketClose', event)
+        if (!event.wasClean) {
+          this.reconnect()
+        }
+      }
+
+      this.connection.onerror = (event) => {
+        consola.error(`${this.logPrefix} Connection error:`, event)
+        if (this.store) this.store.dispatch('socket/onSocketError', event)
+      }
+
+      this.connection.onmessage = (m) => {
+        // Parse the data packet.
+        const d: SocketResponse = JSON.parse(m.data)
+
+        // Is this a socket notification, or an answer to a specific request?
+        let request: Request | undefined
+        const requestIndex = this.requests.findIndex(request => request.id === d.id)
+        if (requestIndex > -1) {
+          request = this.requests[requestIndex]
+          this.requests.splice(requestIndex, 1)
         }
 
-        this.connection.onclose = (event) => {
-          consola.debug(`${this.logPrefix} Connection closed:`, event)
-          clearTimeout(this.pingTimeout)
-          if (this.store) this.store.dispatch('socket/onSocketClose', event)
-          if (!event.wasClean) {
-            this.reconnect()
-          }
+        // Remove a wait if defined.
+        if (this.store && request && request.wait && request.wait.length) {
+          this.store.commit('wait/setRemoveWait', request.wait)
         }
 
-        this.connection.onerror = (event) => {
-          consola.error(`${this.logPrefix} Connection error:`, event)
-          if (this.store) this.store.dispatch('socket/onSocketError', event)
-        }
-
-        this.connection.onmessage = (m) => {
-          // Parse the data packet.
-          const d: SocketResponse = JSON.parse(m.data)
-
-          // Is this a socket notification, or an answer to a specific request?
-          let request: Request | undefined
-          const requestIndex = this.requests.findIndex(request => request.id === d.id)
-          if (requestIndex > -1) {
-            request = this.requests[requestIndex]
-            this.requests.splice(requestIndex, 1)
-          }
-
-          // Remove a wait if defined.
-          if (this.store && request && request.wait && request.wait.length) {
-            this.store.commit('wait/setRemoveWait', request.wait)
-          }
-
-          if (d.error) { // Is it in error?
-            if (request) {
-              Object.defineProperty(d.error, '__request__', { enumerable: false, value: request })
-            }
-            consola.debug(`${this.logPrefix} Response error:`, d.error)
-            if (this.store) this.store.dispatch('socket/onSocketError', d.error)
-            return
-          }
-
-          // we're still alive.
-          this.pong()
-
+        if (d.error) { // Is it in error?
           if (request) {
-            // these are specific answers to a request we've made.
-            // Build the response, including a non-enumerable ref of the original request.
-            let result = (d.result) ? d.result : d.params
-            if (typeof result === 'string') {
-              result = { result }
-            }
+            Object.defineProperty(d.error, '__request__', { enumerable: false, value: request })
+          }
+          consola.debug(`${this.logPrefix} Response error:`, d.error)
+          if (this.store) this.store.dispatch('socket/onSocketError', d.error)
+          return
+        }
 
-            Object.defineProperty(result, '__request__', { enumerable: false, value: request })
-            consola.debug(`${this.logPrefix} Response:`, result)
-            if (request.dispatch && this.store) this.store?.dispatch(request.dispatch, result)
-            if (request.commit && this.store) this.store?.commit(request.commit, result)
-          } else {
-            // These are socket notifications (i.e., no specific request was made..)
-            // Dispatch with the name of the method, converted to camelCase.
+        // we're still alive.
+        this.pong()
 
-            if (d.params && d.params[0]) {
-              const [params, eventtime] = d.params
+        if (request) {
+          // these are specific answers to a request we've made.
+          // Build the response, including a non-enumerable ref of the original request.
+          let result = (d.result) ? d.result : d.params
+          if (typeof result === 'string') {
+            result = { result }
+          }
 
-              if (d.method !== 'notify_status_update') {
-                // Normally, we let notifications through with no cache...
-                if (this.store) this.store.dispatch('socket/' + camelCase(d.method), params)
-              } else {
-                // ...However, status notifications come through thick and fast,
-                // so we cache these and send them through every second.
+          Object.defineProperty(result, '__request__', { enumerable: false, value: request })
+          consola.debug(`${this.logPrefix} Response:`, result)
+          if (request.dispatch && this.store) this.store?.dispatch(request.dispatch, result)
+          if (request.commit && this.store) this.store?.commit(request.commit, result)
+        } else {
+          // These are socket notifications (i.e., no specific request was made..)
+          // Dispatch with the name of the method, converted to camelCase.
 
-                // If any of these properties exist, bypass the cache and send immediately
-                for (const key of ['motion_report']) {
-                  if (this.store && key in params) {
-                    this.store.dispatch('printer/onFastNotifyStatusUpdate', { key, payload: params[key] }, { root: true })
-                    delete params[key]
-                  }
-                }
+          if (d.params && d.params[0]) {
+            const [params, eventtime] = d.params
 
-                const timestamp = eventtime ? eventtime * 1000 : Date.now()
+            if (d.method !== 'notify_status_update') {
+              // Normally, we let notifications through with no cache...
+              if (this.store) this.store.dispatch('socket/' + camelCase(d.method), params)
+            } else {
+              // ...However, status notifications come through thick and fast,
+              // so we cache these and send them through every second.
 
-                this.cache = (!this.cache)
-                  ? { timestamp, params }
-                  : { timestamp: this.cache.timestamp, params: deepMerge(this.cache.params, params, { arrayMerge: (_, y) => y }) }
-
-                // If there's a second or more difference, flush the cache.
-                if (timestamp - this.cache.timestamp >= 1000) {
-                  if (this.store) this.store.dispatch('socket/' + camelCase(d.method), this.cache.params)
-                  this.cache = { timestamp, params: {} }
+              // If any of these properties exist, bypass the cache and send immediately
+              for (const key of ['motion_report']) {
+                if (this.store && key in params) {
+                  this.store.dispatch('printer/onFastNotifyStatusUpdate', { key, payload: params[key] }, { root: true })
+                  delete params[key]
                 }
               }
-            } else {
-              // No params? Let it through.
-              if (this.store) this.store.dispatch('socket/' + camelCase(d.method))
+
+              const timestamp = eventtime ? eventtime * 1000 : Date.now()
+
+              this.cache = (!this.cache)
+                ? { timestamp, params }
+                : { timestamp: this.cache.timestamp, params: mergeWith(this.cache.params, params, (dest, src) => Array.isArray(dest) ? src : undefined) }
+
+              // If there's a second or more difference, flush the cache.
+              if (timestamp - this.cache.timestamp >= 1000) {
+                if (this.store) this.store.dispatch('socket/' + camelCase(d.method), this.cache.params)
+                this.cache = { timestamp, params: {} }
+              }
             }
+          } else {
+            // No params? Let it through.
+            if (this.store) this.store.dispatch('socket/' + camelCase(d.method))
           }
         }
-      })
-      .catch((err) => {
-        // Bad. If this is a 401, then don't retry. Otherwise do.
-        if (err.response?.status !== 401) this.reconnect()
-      })
+      }
+    } catch (error: unknown) {
+      // Bad. If this is a 401, then don't retry. Otherwise do.
+      if (
+        !axios.isAxiosError(error) ||
+        error.response?.status !== 401
+      ) {
+        this.reconnect()
+      }
+    }
   }
 
   reconnect () {
@@ -250,7 +253,11 @@ export class WebSocketClient {
 }
 
 export const SocketPlugin = {
-  install (Vue: typeof _Vue, options?: any) {
+  install (Vue: typeof _Vue, options?: SocketPluginOptions) {
+    if (options?.store == null) {
+      throw new Error('options required')
+    }
+
     const socket = new WebSocketClient(options)
     Vue.prototype.$socket = socket
     Vue.$socket = socket
@@ -267,12 +274,11 @@ declare module 'vue/types/vue' {
   }
 }
 
-interface Options {
-  url: string;
+interface SocketPluginOptions {
   token?: string;
   reconnectEnabled?: boolean;
   reconnectInterval?: number;
-  store: any;
+  store: Store<RootState>;
 }
 
 export interface NotifyOptions {

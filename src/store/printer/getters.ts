@@ -1,51 +1,47 @@
 import Vue from 'vue'
 import type { GetterTree } from 'vuex'
 import type { RootState } from '../types'
-import type { PrinterState, Heater, Fan, Led, OutputPin, Sensor, RunoutSensor, KnownExtruder, MCU, Endstop, Probe, ExtruderStepper, Extruder, ExtruderConfig, ProbeName, Stepper } from './types'
+import type { PrinterState, Heater, Fan, Led, OutputPin, Sensor, RunoutSensor, KnownExtruder, MCU, Endstop, Probe, ExtruderStepper, Extruder, ExtruderConfig, ProbeName, Stepper, ScrewsTiltAdjustScrew, ScrewsTiltAdjust, BedScrews, BedSize, GcodeCommands, TimeEstimates, BeaconState } from './types'
 import { get } from 'lodash-es'
 import getKlipperType from '@/util/get-klipper-type'
+import i18n from '@/plugins/i18n'
+import type { GcodeHelp } from '../console/types'
+import type { ServerInfo } from '../server/types'
+import { Globals } from '@/globals'
+import isKeyOf from '@/util/is-key-of'
 
 export const getters: GetterTree<PrinterState, RootState> = {
 
   /**
    * Indicates if klippy is connected or not.
    */
-  getklippyReady: (state, getters, rootState, rootGetters): boolean => {
+  getKlippyReady: (state, getters, rootState, rootGetters): boolean => {
     // Valid states are;
     // ready, startup, shutdown, error
-    const serverInfo = rootGetters['server/getInfo']
-    const server_klippy_state = serverInfo.klippy_state || ''
-    const connected = serverInfo.klippy_connected || false
-    if (
-      server_klippy_state !== 'ready' ||
-      !connected
-    ) {
-      return false
-    }
-    return true
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
+
+    return (
+      serverInfo.klippy_state === 'ready' &&
+      serverInfo.klippy_connected
+    )
+  },
+
+  getKlippyConnected: (state, getters, rootState, rootGetters): boolean => {
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
+
+    return serverInfo.klippy_connected
   },
 
   getKlippyState: (state, getters, rootState, rootGetters): string => {
-    const serverInfo = rootGetters['server/getInfo']
-    const server_klippy_state = serverInfo.klippy_state || ''
-    return Vue.$filters.capitalize(server_klippy_state)
-    // if (state1 === state2) {
-    //   return Vue.$filters.capitalize(state1)
-    // }
-    // if (state1 !== 'ready' && state1 !== '') {
-    //   return Vue.$filters.capitalize(state1)
-    // }
-    // if (state2 !== 'ready' && state1 !== '') {
-    //   return Vue.$filters.capitalize(state2)
-    // }
-    // return state1
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
+
+    return Vue.$filters.capitalize(serverInfo.klippy_state || '')
   },
 
   getKlippyStateMessage: (state, getters, rootState, rootGetters): string => {
-    const regex = /(?:\r\n|\r|\n)/g
     // If there's absolutely no connection to klipper, then
     // say so.
-    const serverInfo = rootGetters['server/getInfo']
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
     if (serverInfo.klippy_connected === false) {
       return 'Klippy not connected.'
     }
@@ -53,19 +49,26 @@ export const getters: GetterTree<PrinterState, RootState> = {
     // If an external source fires an estop, or the client
     // is refreshed while klipper is down - the webhook data maybe invalid
     // but the printer info should be good.
-    if (
-      state.printer.info.state_message &&
-      state.printer.info.state_message !== ''
-    ) {
-      return state.printer.info.state_message.trim().replace(regex, '<br />')
+    if (state.info.state_message) {
+      return state.info.state_message.trim().replace(/\r\n|\r|\n/g, '<br />')
     }
-    if (
-      state.printer.webhooks.state_message &&
-      state.printer.webhooks.state_message !== ''
-    ) {
-      return state.printer.webhooks.state_message.trim().replace(regex, '<br />')
+    if (state.printer.webhooks.state_message) {
+      return state.printer.webhooks.state_message.trim().replace(/\r\n|\r|\n/g, '<br />')
     }
     return 'Unknown'
+  },
+
+  getKlippyApp: (state) => {
+    const app = state.info.app?.toLowerCase()
+
+    const klippyApp = app && isKeyOf(app, Globals.SUPPORTED_SERVICES.klipper)
+      ? app
+      : 'klipper'
+
+    return {
+      name: klippyApp,
+      ...Globals.SUPPORTED_SERVICES.klipper[klippyApp]
+    }
   },
 
   /**
@@ -77,7 +80,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
     // If the idle state says we're printing, but the print_stats say otherwise - then
     // we're probably busy moving the toolhead or doing some other process.
     // Possible values are;
-    // printing, busy, paused, ready, idle, standby
+    // printing, busy, paused, cancelled, ready, idle, standby
     if (state1 && state2) {
       if (
         state2.toLowerCase() === 'paused' ||
@@ -100,9 +103,9 @@ export const getters: GetterTree<PrinterState, RootState> = {
     }
   },
 
-  getPrintProgress: (state) => {
+  getFileRelativePrintProgress: (state): number => {
     const { gcode_start_byte, gcode_end_byte, path, filename } = state.printer.current_file ?? {}
-    const { file_position } = state.printer.virtual_sdcard ?? {}
+    const { file_position, progress } = state.printer.virtual_sdcard ?? {}
 
     const fullFilename = path ? `${path}/${filename}` : filename
 
@@ -116,10 +119,61 @@ export const getters: GetterTree<PrinterState, RootState> = {
       if (currentPosition > 0 && endPosition > 0) return currentPosition / endPosition
     }
 
+    return progress || 0
+  },
+
+  getFileAbsolutePrintProgress: (state): number => {
+    return state.printer.virtual_sdcard?.progress || 0
+  },
+
+  getSlicerPrintProgress: (state): number => {
     return state.printer.display_status.progress || 0
   },
 
-  getPrintLayers: (state) => {
+  getFilamentPrintProgress: (state) => {
+    const { filament_used, filename: statsFilename } = state.printer.print_stats ?? {}
+    const { filament_total, path, filename } = state.printer.current_file ?? {}
+
+    const fullFilename = path ? `${path}/${filename}` : filename
+
+    if (filament_used != null && filament_total && fullFilename === statsFilename) {
+      return filament_used / filament_total
+    }
+
+    return state.printer.virtual_sdcard?.progress || 0
+  },
+
+  getPrintProgress: (state, getters, rootState): number => {
+    const printProgressCalculation = rootState.config.uiSettings.general.printProgressCalculation
+
+    const printProgressCalculationResults = printProgressCalculation
+      .map(type => {
+        switch (type) {
+          case 'file':
+            return getters.getFileRelativePrintProgress
+
+          case 'fileAbsolute':
+            return getters.getFileAbsolutePrintProgress
+
+          case 'slicer':
+            return getters.getSlicerPrintProgress
+
+          case 'filament':
+            return getters.getFilamentPrintProgress
+
+          default:
+            return 0
+        }
+      })
+      .filter(result => result > 0)
+
+    const printProgress = printProgressCalculationResults
+      .reduce((a, b) => a + b, 0) / printProgressCalculationResults.length || 0
+
+    return printProgress
+  },
+
+  getPrintLayers: (state): number => {
     const layersFromPrintStats = state.printer.print_stats.info?.total_layer
     if (typeof layersFromPrintStats === 'number') {
       return layersFromPrintStats
@@ -138,7 +192,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return 0
   },
 
-  getPrintLayer: (state) => {
+  getPrintLayer: (state): number => {
     const layerFromPrintStats = state.printer.print_stats.info?.current_layer
     if (typeof layerFromPrintStats === 'number') {
       return layerFromPrintStats
@@ -161,63 +215,63 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return 0
   },
 
-  getTimeEstimates: (state, getters) => {
-    const progress = getters.getPrintProgress
-    const endTime = Math.floor(Date.now() / 1000)
+  getTimeEstimates: (state, getters, rootGetters): TimeEstimates => {
+    const progress = getters.getPrintProgress as number
+    const fileProgress = getters.getFileRelativePrintProgress as number
 
-    const duration = (
-      'print_stats' in state.printer &&
-      'print_duration' in state.printer.print_stats
-    )
-      ? state.printer.print_stats.print_duration
+    const totalDuration = state.printer.print_stats?.total_duration as number | undefined ?? 0
+    const printDuration = state.printer.print_stats?.print_duration as number | undefined ?? 0
+
+    const fileLeft = printDuration > 0 && fileProgress > 0
+      ? printDuration / fileProgress - printDuration
       : 0
 
-    const multiplier = state.printer.gcode_move.speed_factor || 1
+    const currentFileStatus = state.printer.current_file?.history?.status as string | undefined
+    const currentFileTotalDuration = state.printer.current_file?.history?.total_duration as number | undefined
 
-    let file = 0
-    let fileLeft = 0
-    let fileEndTime = 0
-    if (progress > 0 && duration > 0) {
-      file = duration / progress
-      fileLeft = (file - duration) / multiplier
-      fileEndTime = endTime + fileLeft
-    }
+    const actualLeft = currentFileStatus === 'completed' && currentFileTotalDuration != null
+      ? currentFileTotalDuration - printDuration
+      : 0
 
-    let actualTotal = 0
-    let actualLeft = 0
-    let actualEndTime = 0
-    if (
-      'current_file' in state.printer &&
-      'history' in state.printer.current_file &&
-      state.printer.current_file.history.status === 'completed'
-    ) {
-      actualTotal = state.printer.current_file.history.total_duration
-      actualLeft = (actualTotal - duration) / multiplier
-      actualEndTime = endTime + actualLeft
-    }
+    const slicerTotal = state.printer.current_file?.estimated_time as number | undefined
 
-    let slicer = 0
-    let slicerLeft = 0
-    let slicerEndTime = 0
-    if (
-      'current_file' in state.printer &&
-      'estimated_time' in state.printer.current_file
-    ) {
-      slicer = state.printer.current_file.estimated_time
-      slicerLeft = (slicer - duration) / multiplier
-      slicerEndTime = endTime + slicerLeft
-    }
+    const slicerLeft = slicerTotal != null && slicerTotal > 0
+      ? slicerTotal - printDuration
+      : 0
 
-    let eta = fileEndTime
-    if (slicerEndTime > 0) eta = slicerEndTime
-    if (actualEndTime > 0) eta = actualEndTime
+    const printEtaCalculation = rootGetters.config.uiSettings.general.printEtaCalculation
+
+    const printEtaCalculationResults = printEtaCalculation
+      .map(type => {
+        switch (type) {
+          case 'file':
+            return (
+              actualLeft > 0
+                ? actualLeft
+                : fileLeft
+            )
+
+          case 'slicer':
+            return slicerLeft
+
+          default:
+            return 0
+        }
+      })
+      .filter(result => result > 0)
+
+    const etaLeft = printEtaCalculationResults
+      .reduce((a, b) => a + b, 0) / printEtaCalculationResults.length || 0
+
+    const eta = Date.now() + etaLeft * 1000
 
     return {
       progress: Math.floor(progress * 100),
-      duration,
-      slicer: slicerLeft,
-      file: fileLeft,
-      actual: actualLeft,
+      printDuration,
+      totalDuration,
+      slicerLeft,
+      fileLeft,
+      actualLeft,
       eta
     }
   },
@@ -244,6 +298,17 @@ export const getters: GetterTree<PrinterState, RootState> = {
         })
       })
     return mcus
+  },
+
+  getHasExtruder: (state) => {
+    return state.printer.extruder
+  },
+
+  getHasMultipleExtruders: (state) => {
+    return (
+      state.printer.extruder &&
+      state.printer.extruder1
+    )
   },
 
   /**
@@ -312,7 +377,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
 
       steppers.push({
         name,
-        prettyName: Vue.$filters.startCase(name),
+        prettyName: Vue.$filters.prettyCase(name),
         key: item,
         enabled: state.printer.stepper_enable?.steppers[item],
         ...e,
@@ -323,19 +388,23 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return steppers
   },
 
+  getHasSteppersEnabled: (state, getters): boolean => {
+    const steppers = getters.getSteppers as Stepper[]
+
+    return Object.values(steppers)
+      .some(stepper => stepper.enabled == null || stepper.enabled)
+  },
+
   /**
    * Given axes, returns a boolean indicating if the axes are homed.
    */
   getHomedAxes: (state) => (axes?: string): boolean => {
-    if (axes && axes.length > 0) {
-      let r = false
-      const a = axes.split('')
-      a.forEach((char) => {
-        r = state.printer.toolhead.homed_axes.includes(char)
-      })
-      return r
-    }
-    return false
+    return (
+      axes != null &&
+      axes.length > 0 &&
+      axes.split('')
+        .every(char => state.printer.toolhead.homed_axes.includes(char))
+    )
   },
 
   getRunoutSensors: (state): RunoutSensor[] => {
@@ -349,6 +418,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
         const sensor = get(state.printer, item, undefined)
         sensors.push({
           name,
+          prettyName: Vue.$filters.prettyCase(name),
           ...sensor
         })
       }
@@ -421,7 +491,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
             : e
 
           const color = Vue.$colorset.next(getKlipperType(e), e)
-          const prettyName = Vue.$filters.startCase(name)
+          const prettyName = Vue.$filters.prettyCase(name)
 
           r.push({
             ...heater,
@@ -444,7 +514,9 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return getters.getOutputs([
       'led',
       'neopixel',
-      'dotstar'
+      'dotstar',
+      'pca9533',
+      'pca9632'
     ], showHidden)
   },
 
@@ -486,7 +558,9 @@ export const getters: GetterTree<PrinterState, RootState> = {
    */
   getPins: (_, getters) => (showHidden = false) => {
     const outputs = getters.getOutputs([
-      'output_pin'
+      'output_pin',
+      'pwm_tool',
+      'pwm_cycle_time'
     ], showHidden)
     return outputs.sort((output: OutputPin) => output.pwm ? 1 : -1)
   },
@@ -512,14 +586,18 @@ export const getters: GetterTree<PrinterState, RootState> = {
 
     // Generic pins...
     const outputPins = [
-      'output_pin'
+      'output_pin',
+      'pwm_tool',
+      'pwm_cycle_time'
     ]
 
     // LEDs...
     const leds = [
       'led',
       'neopixel',
-      'dotstar'
+      'dotstar',
+      'pca9533',
+      'pca9632'
     ]
 
     // Are they controllable?
@@ -527,9 +605,13 @@ export const getters: GetterTree<PrinterState, RootState> = {
       'fan',
       'fan_generic',
       'output_pin',
+      'pwm_tool',
+      'pwm_cycle_time',
       'led',
       'neopixel',
-      'dotstar'
+      'dotstar',
+      'pca9533',
+      'pca9632'
     ]
 
     // Should we apply a color?
@@ -540,13 +622,18 @@ export const getters: GetterTree<PrinterState, RootState> = {
     // Should we filter visiblity based on the _ prefix?
     const filterByPrefix = [
       'output_pin',
+      'pwm_tool',
+      'pwm_cycle_time',
       'temperature_fan',
       'controller_fan',
       'heater_fan',
       'fan_generic',
       'led',
       'neopixel',
-      'dotstar'
+      'dotstar',
+      'pca9533',
+      'pca9632',
+      'nevermore'
     ]
 
     const supportedTypes = (filter && filter.length)
@@ -565,7 +652,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
       ) {
         const prettyName = name === 'fan'
           ? 'Part Fan' // If we know its the part fan.
-          : Vue.$filters.startCase(name)
+          : Vue.$filters.prettyCase(name)
 
         const color = (applyColor.includes(type))
           ? Vue.$colorset.next(getKlipperType(pin), pin)
@@ -596,9 +683,10 @@ export const getters: GetterTree<PrinterState, RootState> = {
         if (outputPins.includes(type)) {
           output = {
             ...output,
-            pwm: (config && config.pwm) ? config.pwm : false,
-            scale: (config && config.scale) ? config.scale : 1,
-            controllable: (config && config.static_value) ? false : (controllable.includes(type))
+            pwm: config?.pwm ?? false,
+            scale: config?.scale ?? 1,
+            resetValue: config?.value ?? 0,
+            controllable: config?.static_value ? false : controllable.includes(type)
           }
         }
 
@@ -619,14 +707,25 @@ export const getters: GetterTree<PrinterState, RootState> = {
       'tmc2240',
       'z_thermal_adjust'
     ]
+    const supportedDrivers = [
+      'tmc2240'
+    ]
 
     const sensors = Object.keys(state.printer)
       .reduce((groups, item) => {
         const [type, nameFromSplit] = item.split(' ', 2)
+        const name = nameFromSplit ?? item
 
-        if (supportedSensors.includes(type)) {
-          const name = nameFromSplit ?? item
-          const prettyName = Vue.$filters.startCase(name)
+        if (supportedSensors.includes(type) && !name.startsWith('_')) {
+          const prettyName = supportedDrivers.includes(type)
+            ? i18n.t('app.general.label.stepper_driver',
+              {
+                name:
+                  name.startsWith('stepper_')
+                    ? name.substring(8).toUpperCase()
+                    : Vue.$filters.prettyCase(name)
+              })
+            : Vue.$filters.prettyCase(name)
           const color = Vue.$colorset.next(getKlipperType(item), item)
           const config = getters.getPrinterSettings(item)
 
@@ -653,9 +752,10 @@ export const getters: GetterTree<PrinterState, RootState> = {
 
   getExtraSensorData: (state) => (sensorType: string, name: string) => {
     const supportedSensors = [
+      'aht10',
       'bme280',
       'htu21d',
-      'aht10'
+      'sht3x'
     ]
 
     if (supportedSensors.includes(sensorType)) {
@@ -692,19 +792,11 @@ export const getters: GetterTree<PrinterState, RootState> = {
       ]
     ]
 
-    const filterByPrefix = [
-      'temperature_fan'
-    ]
-
     const printerKeys = Object.keys(state.printer)
 
     const sensors = keyGroups.flatMap(keyGroup => {
       const keyGroupRegExpArray = keyGroup
-        .map(x => new RegExp(
-          filterByPrefix.includes(x)
-            ? `^${x}(?! _)`
-            : `^${x}`)
-        )
+        .map(x => new RegExp(`^${x}(?! _)`))
 
       return printerKeys
         .filter(key => keyGroupRegExpArray.some(x => x.test(key)))
@@ -722,23 +814,70 @@ export const getters: GetterTree<PrinterState, RootState> = {
 
   getBedScrews: (_, getters) => {
     const config = getters.getPrinterSettings('bed_screws')
-    const screws = []
+    const screws: BedScrews[] = []
 
     for (let index = 1; index <= 99; index++) {
-      const adjust = config[`screw${index}`]
+      const key = `screw${index}`
+      const coords = config[key]
 
-      if (!adjust) {
+      if (!coords) {
         break
       }
 
+      const fine = config[`screw${index}_fine_adjust`]
+      const name = config[`screw${index}_name`]
+      const prettyName = Vue.$filters.prettyCase(name || i18n.t('app.general.label.screw_number', { index: index + 1 }))
+
       screws.push({
-        adjust,
-        fine: config[`screw${index}_fine_adjust`],
-        name: config[`screw${index}_name`]
+        key,
+        name,
+        prettyName,
+        fine,
+        x: coords[0],
+        y: coords[1]
       })
     }
 
     return screws
+  },
+
+  getScrewsTiltAdjust: (state, getters) => {
+    const config = getters.getPrinterSettings('screws_tilt_adjust')
+    const screws: ScrewsTiltAdjustScrew[] = []
+
+    const { results, ...rest } = state.printer.screws_tilt_adjust
+
+    for (let index = 1; index <= 99; index++) {
+      const key = `screw${index}`
+      const result = results?.[key]
+
+      if (!result) {
+        break
+      }
+
+      const coords = config[key]
+      const name = config[`${key}_name`]
+      const prettyName = Vue.$filters.prettyCase(name || i18n.t('app.general.label.screw_number', { index: index + 1 }))
+      const [hours, minutes] = result.adjust
+        .split(':')
+        .map(Number)
+      const adjustMinutes = hours * 60 + minutes
+
+      screws.push({
+        key,
+        name,
+        prettyName,
+        ...result,
+        adjustMinutes,
+        x: coords[0],
+        y: coords[1]
+      })
+    }
+
+    return {
+      ...rest,
+      screws
+    } as ScrewsTiltAdjust
   },
 
   /**
@@ -769,39 +908,44 @@ export const getters: GetterTree<PrinterState, RootState> = {
   },
 
   getHasWarnings: (state, getters, rootState) => {
-    if (
-      (rootState.socket && rootState.socket.open && rootState.socket.ready) &&
-      (getters.getPrinterWarnings.length > 0 || getters.getKlipperWarnings.length > 0 ||
-        getters.getMoonrakerFailedComponents.length > 0 || getters.getMoonrakerWarnings.length > 0)
-    ) {
-      return true
-    } else {
-      return false
-    }
+    return (
+      rootState.socket &&
+      rootState.socket.open &&
+      rootState.socket.ready &&
+      (
+        getters.getPrinterWarnings.length > 0 ||
+        getters.getKlipperWarnings.length > 0 ||
+        getters.getMoonrakerFailedComponents.length > 0 ||
+        getters.getMoonrakerWarnings.length > 0
+      )
+    )
   },
 
   getPrinterWarnings: (state, getters) => {
     const config = getters.getPrinterConfig()
     const warnings = []
 
-    if (config && !('virtual_sdcard' in config)) {
-      warnings.push({ message: '[virtual_sdcard] not found in printer configuration.' })
+    if (config) {
+      if (!('virtual_sdcard' in config)) {
+        warnings.push({ message: '[virtual_sdcard] not found in printer configuration.' })
+      }
+
+      if (!('pause_resume' in config)) {
+        warnings.push({ message: '[pause_resume] not found in printer configuration.' })
+      }
+
+      if (
+        !('display' in config) &&
+        !('display_status' in config)
+      ) {
+        warnings.push({ message: '[display_status] is required if you do not have a [display] defined.' })
+      }
+
+      if (!('gcode_macro CANCEL_PRINT' in config)) {
+        warnings.push({ message: 'CANCEL_PRINT macro not found in configuration.' })
+      }
     }
 
-    if (config && !('pause_resume' in config)) {
-      warnings.push({ message: '[pause_resume] not found in printer configuration.' })
-    }
-
-    if (
-      config &&
-      !('display' in config) && !('display_status' in config)
-    ) {
-      warnings.push({ message: '[display_status] is required if you do not have a [display] defined.' })
-    }
-
-    if (config && !('gcode_macro CANCEL_PRINT' in config)) {
-      warnings.push({ message: 'CANCEL_PRINT macro not found in configuration.' })
-    }
     return warnings
   },
 
@@ -810,11 +954,15 @@ export const getters: GetterTree<PrinterState, RootState> = {
   },
 
   getMoonrakerFailedComponents: (state, getters, rootState, rootGetters) => {
-    return rootGetters['server/getInfo'].failed_components || []
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
+
+    return serverInfo.failed_components || []
   },
 
   getMoonrakerWarnings: (state, getters, rootState, rootGetters) => {
-    return rootGetters['server/getInfo'].warnings || []
+    const serverInfo = rootGetters['server/getInfo'] as ServerInfo
+
+    return serverInfo.warnings || []
   },
 
   getSaveConfigPending: (state): boolean => {
@@ -829,13 +977,53 @@ export const getters: GetterTree<PrinterState, RootState> = {
     return saveConfigPendingItems || {}
   },
 
-  getHasHomingOverride: (state, getters) => {
-    const config = getters.getPrinterConfig()
-    if (config && ('homing_override' in config)) {
-      return true
-    } else {
-      return false
+  getHasRoundBed: (_, getters): boolean => {
+    const kinematics = getters.getPrinterSettings('printer.kinematics') || ''
+
+    return [
+      'delta',
+      'polar',
+      'rotary_delta',
+      'winch'
+    ].includes(kinematics)
+  },
+
+  getBedSize: (state): BedSize | undefined => {
+    const { axis_minimum, axis_maximum } = state.printer.toolhead
+
+    if (
+      axis_minimum.length < 2 ||
+      axis_maximum.length < 2
+    ) {
+      return undefined
     }
+
+    const [minX, minY] = axis_minimum
+    const [maxX, maxY] = axis_maximum
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY
+    }
+  },
+
+  getAvailableCommands: (state, getters, rootState, rootGetters): GcodeCommands => {
+    const availableCommands = state.printer.gcode.commands as GcodeCommands | null
+
+    if (availableCommands) {
+      return availableCommands
+    }
+
+    const knownCommands = rootGetters['console/getAllKnownCommands'] as GcodeHelp
+
+    return Object.entries(knownCommands)
+      .reduce((availableCommands, [key, help]) => {
+        availableCommands[key] = { help }
+
+        return availableCommands
+      }, {} as GcodeCommands)
   },
 
   getIsManualProbeActive: (state) => {
@@ -844,5 +1032,37 @@ export const getters: GetterTree<PrinterState, RootState> = {
 
   getIsBedScrewsAdjustActive: (state) => {
     return state.printer.bed_screws?.is_active || false
+  },
+
+  getHasScrewsTiltAdjustResults: (state) => {
+    const { error, max_deviation, results } = state.printer.screws_tilt_adjust ?? {}
+
+    return (
+      !error &&
+      max_deviation == null &&
+      results &&
+      Object.keys(results).length > 0
+    )
+  },
+
+  getSupportsBeacon: (state, getters) => {
+    return getters.getPrinterSettings('beacon') != null
+  },
+
+  getBeaconModels: (state, getters) => {
+    const beacon = state.printer.beacon as BeaconState
+
+    const models = Object.keys(getters.getPrinterSettings())
+      .filter(key => key.startsWith('beacon model '))
+      .map(key => {
+        const name = key.substring(13)
+
+        return {
+          name,
+          active: beacon.model === name
+        }
+      })
+
+    return models
   }
 }

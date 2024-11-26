@@ -1,14 +1,16 @@
-import _Vue from 'vue'
-import VueRouter from 'vue-router'
-import { camelCase, startCase, capitalize, isFinite } from 'lodash-es'
+import type _Vue from 'vue'
+import { isNavigationFailure, NavigationFailureType, type RawLocation } from 'vue-router'
+import { camelCase, startCase, capitalize, isFinite, upperFirst } from 'lodash-es'
 import type { ApiConfig, TextSortOrder } from '@/store/config/types'
 import { TinyColor } from '@ctrl/tinycolor'
-import { DateFormats, Globals, TimeFormats, Waits } from '@/globals'
+import { DateFormats, Globals, TimeFormats, Waits, type DateTimeFormat } from '@/globals'
 import i18n from '@/plugins/i18n'
 import type { TranslateResult } from 'vue-i18n'
 import store from '@/store'
+import router from '@/router'
 import type { FileBrowserEntry } from '@/store/files/types'
 import versionStringCompare from '@/util/version-string-compare'
+import consola from 'consola'
 
 /**
  * credit: taken from Vuetify source
@@ -48,7 +50,7 @@ export const Filters = {
    * Formats a time to 00h 00m 00s
    * Expects to be passed seconds.
    */
-  formatCounterTime: (seconds: number | string) => {
+  formatCounterSeconds: (seconds: number | string) => {
     seconds = +seconds
     if (isNaN(seconds) || !isFinite(seconds)) seconds = 0
     let isNeg = false
@@ -67,16 +69,27 @@ export const Filters = {
     return (isNeg) ? '-' + r : r
   },
 
-  getDateFormat: (override?: string) => {
+  getNavigatorLocales: () => {
+    return navigator.languages ?? [navigator.language]
+  },
+
+  getAllLocales: () => {
+    return [
+      i18n.locale,
+      ...Filters.getNavigatorLocales()
+    ]
+  },
+
+  getDateFormat: (override?: string): DateTimeFormat => {
     return {
-      locale: i18n.locale,
+      locales: Filters.getAllLocales(),
       ...DateFormats[override ?? store.state.config.uiSettings.general.dateFormat]
     }
   },
 
-  getTimeFormat: (override?: string) => {
+  getTimeFormat: (override?: string): DateTimeFormat => {
     return {
-      locale: i18n.locale,
+      locales: Filters.getAllLocales(),
       ...TimeFormats[override ?? store.state.config.uiSettings.general.timeFormat]
     }
   },
@@ -85,7 +98,7 @@ export const Filters = {
     const date = new Date(value)
     const dateFormat = Filters.getDateFormat()
 
-    return date.toLocaleDateString(dateFormat.locale, {
+    return date.toLocaleDateString(dateFormat.locales, {
       ...dateFormat.options,
       ...options
     })
@@ -95,7 +108,7 @@ export const Filters = {
     const date = new Date(value)
     const timeFormat = Filters.getTimeFormat()
 
-    return date.toLocaleTimeString(timeFormat.locale, {
+    return date.toLocaleTimeString(timeFormat.locales, {
       ...timeFormat.options,
       ...options
     })
@@ -109,11 +122,16 @@ export const Filters = {
   },
 
   formatDateTime: (value: number | string | Date, options?: Intl.DateTimeFormatOptions) => {
-    const date = new Date(value)
     const timeFormat = Filters.getTimeFormat()
     const dateFormat = Filters.getDateFormat()
 
-    return date.toLocaleDateString(dateFormat.locale, {
+    if (timeFormat.locales !== dateFormat.locales) {
+      return Filters.formatDate(value, options) + ' ' + Filters.formatTime(value, options)
+    }
+
+    const date = new Date(value)
+
+    return date.toLocaleDateString(dateFormat.locales, {
       ...dateFormat.options,
       ...timeFormat.options,
       ...options
@@ -148,7 +166,7 @@ export const Filters = {
   },
 
   formatRelativeTime (value: number, unit: Intl.RelativeTimeFormatUnit, options?: Intl.RelativeTimeFormatOptions) {
-    const rtf = new Intl.RelativeTimeFormat(i18n.locale, {
+    const rtf = new Intl.RelativeTimeFormat(Filters.getAllLocales(), {
       numeric: 'auto',
       ...options
     })
@@ -195,6 +213,19 @@ export const Filters = {
     return date.getFullYear() === today.getFullYear()
   },
 
+  upperFirst: (value: string) => {
+    return upperFirst(value)
+  },
+
+  prettyCase: (value: string) => {
+    return value
+      .replace(/_/g, ' ')
+      .split(' ')
+      .filter(x => x)
+      .map(Filters.upperFirst)
+      .join(' ')
+  },
+
   /**
    * Formats a string into camel case.
    */
@@ -221,7 +252,7 @@ export const Filters = {
   /**
    * Formats a number (in bytes) to a human readable file size.
    */
-  getReadableFileSizeString (fileSizeInBytes: number) {
+  getReadableFileSizeString (fileSizeInBytes: number, fractionDigits = 1) {
     let i = -1
     const byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB']
     if (fileSizeInBytes === 0) return `0${byteUnits[0]}`
@@ -230,13 +261,13 @@ export const Filters = {
       i++
     } while (fileSizeInBytes > 1024)
 
-    return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i]
+    return Math.max(fileSizeInBytes, 0.1).toFixed(fractionDigits) + byteUnits[i]
   },
 
   /**
    * Formats a number (in bytes/sec) to a human readable data rate.
    */
-  getReadableDataRateString (dataRateInBytesPerSec: number) {
+  getReadableDataRateString (dataRateInBytesPerSec: number, fractionDigits = 1) {
     let i = -1
     const byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB']
     if (dataRateInBytesPerSec === 0) return `0${byteUnits[0]}`
@@ -245,13 +276,17 @@ export const Filters = {
       i++
     } while (dataRateInBytesPerSec > 1024)
 
-    return Math.max(dataRateInBytesPerSec, 0.2).toFixed(1) + byteUnits[i] + '/Sec'
+    return Math.max(dataRateInBytesPerSec, 0.2).toFixed(fractionDigits) + byteUnits[i] + '/Sec'
   },
 
   /**
    * Formats a number representing mm to human readable distance.
    */
-  getReadableLengthString (lengthInMm: number, showMicrons = false) {
+  getReadableLengthString (lengthInMm: number | undefined | null, showMicrons = false) {
+    if (lengthInMm === undefined || lengthInMm === null) {
+      return '-'
+    }
+
     if (lengthInMm >= 1000) return (lengthInMm / 1000).toFixed(2) + ' m'
     if (lengthInMm > 100) return (lengthInMm / 10).toFixed(1) + ' cm'
     if (lengthInMm < 0.1 && showMicrons) return (lengthInMm * 1000).toFixed(0) + ' μm'
@@ -261,26 +296,46 @@ export const Filters = {
   /**
    * Formats a number representing g to human readable weight.
    */
-  getReadableWeightString (weightInG: number | undefined | null) {
+  getReadableWeightString (weightInG: number | undefined | null, fractionDigits = 2) {
     if (weightInG === undefined || weightInG === null) {
       return '-'
     }
 
-    if (weightInG >= 1000) return (weightInG / 1000).toFixed(2) + ' kg'
-    return weightInG.toFixed(2) + ' g'
+    if (weightInG >= 1000) return (weightInG / 1000).toFixed(fractionDigits) + ' kg'
+    return weightInG.toFixed(fractionDigits) + ' g'
   },
 
   /**
-   * Formats a number representing mm to human readable distance.
+   * Formats a number (in Hz) to a human readable frequency.
    */
-  getReadableFrequencyString (frequencyInHz: number) {
+  getReadableFrequencyString (frequencyInHz: number, fractionDigits = 0) {
     let i = 0
-    const frequencyUnits = [' Hz', ' KHz', ' MHz', ' GHz']
+    const frequencyUnits = [' Hz', ' kHz', ' MHz', ' GHz', ' THz']
     while (frequencyInHz >= 1000) {
       frequencyInHz = frequencyInHz / 1000
       i++
     }
-    return frequencyInHz.toFixed() + frequencyUnits[i]
+    return frequencyInHz.toFixed(fractionDigits) + frequencyUnits[i]
+  },
+
+  /**
+   * Formats a number (in ohms) to a human readable resistance.
+   */
+  getReadableResistanceString (resistanceInOhms: number, fractionDigits = 1) {
+    let i = 0
+    const resistanceUnits = [' Ω', ' kΩ', ' MΩ', ' GΩ', ' TΩ']
+    while (resistanceInOhms >= 1000) {
+      resistanceInOhms = resistanceInOhms / 1000
+      i++
+    }
+    return resistanceInOhms.toFixed(fractionDigits) + resistanceUnits[i]
+  },
+
+  /**
+   * Formats a number (in hPa) to human readable atmospheric pressure.
+   */
+  getReadableAtmosphericPressureString (pressumeInHPa: number, fractionDigits = 1) {
+    return pressumeInHPa.toFixed(fractionDigits) + ' hPa'
   },
 
   /**
@@ -386,17 +441,32 @@ export const Filters = {
    * Simple approach to route somewhere when we don't necessarily want
    * route matching via :to
    */
-  routeTo (router: VueRouter, path: string) {
-    if (router.currentRoute.fullPath !== path) router.push(path)
+  async routeTo (to: RawLocation) {
+    try {
+      await router.push(to)
+    } catch (error) {
+      // Ignore any duplicate navigation error but log the others
+      if (!isNavigationFailure(error, NavigationFailureType.duplicated)) {
+        consola.error('[Router]', error)
+      }
+    }
+  },
+
+  /**
+   * Converts a given weight (in grams) to its corresponding length (in mm)
+   */
+  convertFilamentWeightToLength (weight: number, density: number, diameter: number) {
+    // l[mm] = m[g]/D[g/cm³]/A[mm²]*(1000mm³/cm³)
+    return weight / density / (Math.PI * (diameter / 2) ** 2) * 1000
   }
 }
 
 export const Rules = {
-  required (v: any) {
+  required (v: unknown) {
     return ((v ?? '') !== '') || i18n.t('app.general.simple_form.error.required')
   },
 
-  numberValid (v: any) {
+  numberValid (v: unknown) {
     return !isNaN(+(v ?? NaN)) || i18n.t('app.general.simple_form.error.invalid_number')
   },
 
@@ -409,10 +479,18 @@ export const Rules = {
   },
 
   numberGreaterThanOrEqualOrZero (min: number) {
+    if (min === 0) {
+      return Rules.numberGreaterThanOrEqual(0)
+    }
+
     return (v: number) => +v === 0 || v >= min || i18n.t('app.general.simple_form.error.min_or_0', { min })
   },
 
   numberGreaterThanOrZero (min: number) {
+    if (min === 0) {
+      return Rules.numberGreaterThan(0)
+    }
+
     return (v: number) => +v === 0 || v > min || i18n.t('app.general.simple_form.error.min_or_0', { min: `> ${min}` })
   },
 
@@ -433,14 +511,14 @@ export const Rules = {
   },
 
   lengthGreaterThanOrEqual (min: number) {
-    return (v: string | any[]) => v.length >= min || i18n.t('app.general.simple_form.error.min', { min })
+    return (v: string | unknown[]) => v.length >= min || i18n.t('app.general.simple_form.error.min', { min })
   },
 
   lengthLessThanOrEqual (max: number) {
-    return (v: string | any[]) => v.length <= max || i18n.t('app.general.simple_form.error.max', { max })
+    return (v: string | unknown[]) => v.length <= max || i18n.t('app.general.simple_form.error.max', { max })
   },
 
-  numberArrayValid (v: any[]) {
+  numberArrayValid (v: unknown[]) {
     return !v.some(i => i === '' || isNaN(+(i ?? NaN))) || i18n.t('app.general.simple_form.error.arrayofnums')
   },
 
@@ -457,7 +535,7 @@ export const Rules = {
       // eslint-disable-next-line no-new
       new RegExp(v)
       return true
-    } catch (e) {
+    } catch {
       return i18n.t('app.general.simple_form.error.invalid_expression')
     }
   },

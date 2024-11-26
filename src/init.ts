@@ -5,9 +5,11 @@ import { Globals } from './globals'
 import type { ApiConfig, InitConfig, HostConfig, InstanceConfig } from './store/config/types'
 import axios from 'axios'
 import router from './router'
-import { httpClientActions } from '@/api/httpClientActions'
-import sanitizeEndpoint from '@/util/sanitize-endpoint'
-import webSocketWrapper from '@/util/web-socket-wrapper'
+import { httpClientActions } from './api/httpClientActions'
+import sanitizeEndpoint from './util/sanitize-endpoint'
+import webSocketWrapper from './util/web-socket-wrapper'
+import promiseAny from './util/promise-any'
+import sleep from './util/sleep'
 
 // Load API configuration
 /**
@@ -20,7 +22,7 @@ import webSocketWrapper from '@/util/web-socket-wrapper'
  */
 
 const getHostConfig = async () => {
-  const hostConfigResponse = await httpClientActions.get<HostConfig>(`${import.meta.env.BASE_URL}config.json?date=${Date.now()}`)
+  const hostConfigResponse = await httpClientActions.get<HostConfig>(`${import.meta.env.BASE_URL}config.json`)
   if (hostConfigResponse && hostConfigResponse.data) {
     consola.debug('Loaded web host configuration', hostConfigResponse.data)
     return hostConfigResponse.data
@@ -72,20 +74,33 @@ const getApiConfig = async (hostConfig: HostConfig): Promise<ApiConfig | Instanc
     endpoints.push(`${document.location.protocol}//${document.location.hostname}:${port}`)
   }
 
-  // For each endpoint we have, ping each one to determine if any are active.
-  // If none are, we'll force the instance add dialog.
-  // A 401 would indicate a good ping, since it's potentially an authenticated,
-  // endpoint but working instance.
-  const i = await Promise.race(
-    endpoints.map(async (endpoint, index) => {
-      const apiEndpoints = Vue.$filters.getApiUrls(endpoint)
-      return await webSocketWrapper(apiEndpoints.socketUrl) ? index : -1
-    })
-  )
+  const abortController = new AbortController()
 
-  return (i > -1)
-    ? Vue.$filters.getApiUrls(endpoints[i])
-    : { apiUrl: '', socketUrl: '' }
+  try {
+    const { signal } = abortController
+
+    const defaultOnTimeout = async () => {
+      await sleep(5000, signal)
+
+      return {
+        apiUrl: '',
+        socketUrl: ''
+      } satisfies ApiConfig
+    }
+
+    return await promiseAny([
+      ...endpoints.map(async (endpoint) => {
+        const apiEndpoints = Vue.$filters.getApiUrls(endpoint)
+
+        await webSocketWrapper(apiEndpoints.socketUrl, signal)
+
+        return apiEndpoints
+      }),
+      defaultOnTimeout()
+    ])
+  } finally {
+    abortController.abort()
+  }
 }
 
 const getMoorakerDatabase = async (apiConfig: ApiConfig, namespace: string) => {
@@ -166,6 +181,10 @@ export const appInit = async (apiConfig?: ApiConfig, hostConfig?: HostConfig): P
       break
     }
 
+    if (Object.keys(ROOTS).length === 0) {
+      continue
+    }
+
     const result = await getMoorakerDatabase(apiConfig, NAMESPACE)
 
     apiAuthenticated = result.apiAuthenticated
@@ -183,7 +202,7 @@ export const appInit = async (apiConfig?: ApiConfig, hostConfig?: HostConfig): P
       const value = root.name ? data[root.name] : data
 
       if (root.migrate_only) {
-        if (value) store.dispatch(root.dispatch, value)
+        if (value) await store.dispatch(root.dispatch, value)
       } else {
         if (!value) {
           try {
@@ -203,8 +222,15 @@ export const appInit = async (apiConfig?: ApiConfig, hostConfig?: HostConfig): P
   // apiConfig could have empty strings, meaning we have no valid connection.
   await store.dispatch('init', { apiConfig, hostConfig, apiConnected })
 
-  // Ensure users start on the dash.
-  if (router.currentRoute.path !== '/' && store.state.auth.authenticated) router.push('/')
+  if (store.state.auth.authenticated) {
+    if (router.currentRoute.name === 'login') {
+      await router.push({ name: 'home' })
+    }
+  } else {
+    if (router.currentRoute.name !== 'login') {
+      await router.push({ name: 'login' })
+    }
+  }
 
   return { apiConfig, hostConfig, apiConnected, apiAuthenticated }
 }

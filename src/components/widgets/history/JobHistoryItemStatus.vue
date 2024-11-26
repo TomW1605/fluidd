@@ -1,20 +1,18 @@
 <template>
-  <span>
-    <v-tooltip top>
-      <template #activator="{ on, attrs }">
-        <v-icon
-          v-bind="attrs"
-          small
-          :color="(job.exists) ? state : 'secondary'"
-          class="mr-1"
-          v-on="on"
-        >
-          {{ icon }}
-        </v-icon>
-      </template>
-      <span>{{ job.status }}</span>
-    </v-tooltip>
-  </span>
+  <v-tooltip top>
+    <template #activator="{ on, attrs }">
+      <v-icon
+        v-bind="attrs"
+        small
+        :color="(job.exists) ? state : 'secondary'"
+        class="mr-1"
+        v-on="on"
+      >
+        {{ icon }}
+      </v-icon>
+    </template>
+    <span>{{ job.status }}</span>
+  </v-tooltip>
 </template>
 
 <script lang="ts">
@@ -22,27 +20,21 @@ import { Component, Mixins, Prop } from 'vue-property-decorator'
 import FilesMixin from '@/mixins/files'
 import type { HistoryItem } from '@/store/history/types'
 
+type JobHistoryItemState = 'error' | 'warning' | 'success' | 'info'
+
 @Component({})
 export default class JobHistoryItemStatus extends Mixins(FilesMixin) {
   @Prop({ type: Object, required: true })
   readonly job!: HistoryItem
 
-  // get status () {
-  //   if (this.job.status === 'completed') return 'completed'
-  //   if (this.job.status === 'in_progress') return 'in_progress'
-  //   if (this.job.status.indexOf('_')) {
-  //     return this.job.status.split('_').pop()
-  //   }
-  //   return this.job.status
-  // }
-
   get icon () {
-    const iconMap: { [index: string]: string } = {
+    const iconMap: Record<string, string> = {
       completed: '$checkedCircle',
       printing: '$inProgress',
       in_progress: '$inProgress',
       standby: '$inProgress',
-      cancelled: '$cancelled'
+      cancelled: '$cancelled',
+      interrupted: '$cancelled'
     }
 
     const icon = iconMap[this.job.status]
@@ -51,25 +43,28 @@ export default class JobHistoryItemStatus extends Mixins(FilesMixin) {
     return icon || '$warning'
   }
 
-  get state () {
-    if (
-      this.job.status === 'cancelled' ||
-      this.job.status === 'error' ||
-      this.job.status === 'server_exit'
-    ) return 'error'
+  get state (): JobHistoryItemState {
+    switch (this.job.status) {
+      case 'cancelled':
+      case 'error':
+      case 'interrupted':
+      case 'server_exit':
+        return 'error'
 
-    if (
-      this.job.status === 'printing' ||
-      this.job.status === 'completed' ||
-      this.job.status === 'in_progress'
-    ) return 'success'
+      case 'klippy_shutdown':
+      case 'klippy_disconnect':
+        return 'warning'
 
-    if (
-      this.job.status === 'klippy_shutdown' ||
-      this.job.status === 'klippy_disconnect'
-    ) return 'warning'
+      case 'completed':
+        return 'success'
 
-    return 'success'
+      case 'printing':
+      case 'in_progress':
+        return 'info'
+
+      default:
+        return 'success'
+    }
   }
 
   get inError () {

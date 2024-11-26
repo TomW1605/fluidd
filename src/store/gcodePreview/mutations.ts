@@ -32,14 +32,6 @@ export const mutations: MutationTree<GcodePreviewState> = {
     state.file = undefined
   },
 
-  setViewerState (state, payload: any) {
-    for (const key of Object.keys(state.viewer)) {
-      if (payload[key] !== undefined) {
-        Vue.set(state.viewer, key, payload[key])
-      }
-    }
-  },
-
   setParserProgress (state, payload: number) {
     state.parserProgress = payload
   },

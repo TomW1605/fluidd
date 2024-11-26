@@ -1,7 +1,7 @@
 <template>
   <div>
     <output-pin
-      v-if="item.type === 'output_pin'"
+      v-if="pinTypes.includes(item.type)"
       :key="item.key"
       :pin="item"
     />
@@ -38,6 +38,14 @@ export default class Outputs extends Vue {
   @Prop({ type: Object, required: true })
   readonly item!: Fan | Led | IOutputPin
 
+  get pinTypes () {
+    return [
+      'output_pin',
+      'pwm_tool',
+      'pwm_cycle_time'
+    ]
+  }
+
   get fanTypes () {
     return [
       'temperature_fan',
@@ -52,7 +60,9 @@ export default class Outputs extends Vue {
     return [
       'led',
       'neopixel',
-      'dotstar'
+      'dotstar',
+      'pca9533',
+      'pca9632'
     ]
   }
 }

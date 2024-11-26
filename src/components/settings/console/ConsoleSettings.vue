@@ -25,9 +25,9 @@
         </app-btn>
       </app-setting>
 
-      <v-divider />
-
       <template v-for="filter in filters">
+        <v-divider :key="`divider-${filter.name}`" />
+
         <app-setting
           :key="`filter-${filter.name}`"
           :r-cols="3"
@@ -41,6 +41,7 @@
             text
             x-small
             color=""
+            class="ms-1"
             @click.stop="handleEditFilterDialog(filter)"
           >
             <v-icon color="">
@@ -53,15 +54,14 @@
             text
             x-small
             color=""
+            class="ms-1"
             @click.stop="handleRemoveFilter(filter)"
           >
             <v-icon color="">
-              $close
+              $delete
             </v-icon>
           </app-btn>
         </app-setting>
-
-        <v-divider :key="`divider-${filter.name}`" />
       </template>
 
       <console-filter-dialog
@@ -96,7 +96,7 @@ export default class ConsoleSettings extends Mixins(StateMixin) {
   }
 
   handleEditFilterDialog (filter: ConsoleFilter | null) {
-    const filterCopy = filter
+    const filterCopy: ConsoleFilter = filter
       ? { ...filter }
       : {
           id: '',
@@ -112,8 +112,15 @@ export default class ConsoleSettings extends Mixins(StateMixin) {
     }
   }
 
-  handleRemoveFilter (filter: ConsoleFilter) {
-    this.$store.dispatch('console/onRemoveFilter', filter)
+  async handleRemoveFilter (filter: ConsoleFilter) {
+    const result = await this.$confirm(
+      this.$t('app.general.simple_form.msg.confirm_remove_console_filter', { name: filter.name }).toString(),
+      { title: this.$tc('app.general.label.confirm'), color: 'card-heading', icon: '$error' }
+    )
+
+    if (result) {
+      this.$store.dispatch('console/onRemoveFilter', filter)
+    }
   }
 
   handleSaveFilter (filter: ConsoleFilter) {

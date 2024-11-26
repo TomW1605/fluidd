@@ -3,11 +3,12 @@ import type { MutationTree } from 'vuex'
 import type { ConfigState, UiSettings, SaveByPath, InstanceConfig, InitConfig } from './types'
 import { defaultState } from './state'
 import { Globals } from '@/globals'
-import { merge, set } from 'lodash-es'
+import { cloneDeep, mergeWith, set } from 'lodash-es'
 import { v4 as uuidv4 } from 'uuid'
 import type { AppTableHeader } from '@/types'
 import type { AppTablePartialHeader } from '@/types/tableheaders'
 import type { FileFilterType } from '../files/types'
+import consola from 'consola'
 
 export const mutations: MutationTree<ConfigState> = {
   /**
@@ -20,30 +21,44 @@ export const mutations: MutationTree<ConfigState> = {
   /**
    * Inits UI settings from the db
    */
-  setInitUiSettings (state, payload: UiSettings) {
+  setInitUiSettings (state, payload: Partial<UiSettings>) {
     if (payload) {
-      // Most settings should be merged, so start there.
-      const processed = merge(state.uiSettings, payload)
+      if (payload.theme) {
+        // check for legacy theme color
+        if (
+          payload.theme.color == null &&
+          'currentTheme' in payload.theme &&
+          typeof payload.theme.currentTheme === 'object' &&
+          payload.theme.currentTheme != null &&
+          'primary' in payload.theme.currentTheme &&
+          typeof payload.theme.currentTheme.primary === 'string'
+        ) {
+          consola.debug('Converting legacy theme color')
 
-      // Apply overrides.
-      if (payload.general && payload.general.zAdjustDistances) {
-        Vue.set(processed.general, 'zAdjustDistances', payload.general.zAdjustDistances)
+          payload.theme.color = payload.theme.currentTheme.primary
+
+          delete payload.theme.currentTheme
+        }
+
+        const logoSrc = payload.theme.logo?.src
+
+        if (logoSrc?.startsWith('/')) {
+          payload.theme.logo.src = logoSrc.substring(1)
+        }
       }
 
-      if (payload.general && payload.general.toolheadMoveDistances) {
-        Vue.set(processed.general, 'toolheadMoveDistances', payload.general.toolheadMoveDistances)
-      }
+      const mergedSettings = mergeWith(
+        cloneDeep(state.uiSettings),
+        payload,
+        (dest, src) => Array.isArray(dest) ? src : undefined
+      )
 
-      if (payload.editor && payload.editor.autoEditExtensions) {
-        Vue.set(processed.editor, 'autoEditExtensions', payload.editor.autoEditExtensions)
-      }
-
-      if (payload.fileSystem && payload.fileSystem.activeFilters) {
-        Vue.set(processed.fileSystem, 'activeFilters', payload.fileSystem.activeFilters)
-      }
-
-      Vue.set(state, 'uiSettings', processed)
+      Vue.set(state, 'uiSettings', mergedSettings)
     }
+  },
+
+  setAppReady (state, payload: boolean) {
+    state.appReady = payload
   },
 
   /**
@@ -61,21 +76,6 @@ export const mutations: MutationTree<ConfigState> = {
     state.hostConfig.endpoints = payload.endpoints
     state.hostConfig.hosted = payload.hosted
     state.hostConfig.themePresets = payload.themePresets
-
-    // Ensure the default (first item..) is applied for fresh setups.
-    if (payload.themePresets && payload.themePresets.length >= 1) {
-      const d = payload.themePresets[0]
-      Vue.set(state.uiSettings, 'theme', {
-        ...{
-          isDark: d.isDark,
-          logo: d.logo,
-          currentTheme: {
-            primary: d.color
-          }
-        },
-        ...state.uiSettings.theme
-      })
-    }
   },
 
   setInitInstances (state, payload: InitConfig) {
@@ -163,6 +163,14 @@ export const mutations: MutationTree<ConfigState> = {
     Vue.set(state.uiSettings.fileSystem.activeFilters, payload.root, payload.value)
   },
 
+  setFileSystemSortBy (state, payload: { root: string, value: string | null }) {
+    Vue.set(state.uiSettings.fileSystem.sortBy, payload.root, payload.value)
+  },
+
+  setFileSystemSortDesc (state, payload: { root: string, value: boolean | null }) {
+    Vue.set(state.uiSettings.fileSystem.sortDesc, payload.root, payload.value)
+  },
+
   /**
    * Puts us into layout mode
    */
@@ -177,32 +185,29 @@ export const mutations: MutationTree<ConfigState> = {
   /**
    * Toggle a tables header state based on its name and key.
    */
-  setUpdateHeader (state, payload: { name: string; header: AppTableHeader }) {
-    const header = payload.header
-    const keyBy = (header.key)
-      ? 'key'
-      : 'value'
+  setUpdateHeader (state, payload: { name: string; header: AppTablePartialHeader }) {
+    const { value, visible } = payload.header
 
-    const key = header[keyBy]
     const headers: AppTablePartialHeader[] = state.uiSettings.tableHeaders[payload.name]
 
     if (headers) {
-      const i = headers.findIndex(item => {
-        return item[keyBy] === key
-      })
+      const i = headers.findIndex(item => item.value === value)
+
       if (i >= 0) {
         Vue.set(headers, i, {
           ...headers[i],
-          visible: header.visible
+          visible
         })
       } else {
-        const o: AppTablePartialHeader = {
-          value: header.value,
-          visible: header.visible
-        }
-        if (keyBy === 'key') o.key = header.key
-        headers.push(o)
+        headers.push({
+          value,
+          visible
+        })
       }
     }
+  },
+
+  setUpdateHeaders (state, payload: { name: string; headers: AppTableHeader[] }) {
+    state.uiSettings.tableHeaders[payload.name] = payload.headers
   }
 }

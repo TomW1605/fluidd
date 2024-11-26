@@ -2,7 +2,7 @@ import type { GetterTree } from 'vuex'
 import type { AppDirectory, AppFileWithMeta, FileBrowserEntry, FilesState, RootProperties } from './types'
 import type { RootState } from '../types'
 import type { HistoryItem } from '../history/types'
-import { SupportedImageFormats, SupportedVideoFormats } from '@/globals'
+import { SupportedImageFormats, SupportedMarkdownFormats, SupportedVideoFormats } from '@/globals'
 
 export const getters: GetterTree<FilesState, RootState> = {
   /**
@@ -101,6 +101,7 @@ export const getters: GetterTree<FilesState, RootState> = {
   getRootProperties: () => (root: string): RootProperties => {
     const canView = [
       ...SupportedImageFormats,
+      ...SupportedMarkdownFormats,
       ...SupportedVideoFormats
     ]
 
@@ -111,7 +112,7 @@ export const getters: GetterTree<FilesState, RootState> = {
           accepts: ['.gcode', '.g', '.gc', '.gco', '.ufp', '.nc'],
           canView,
           canConfigure: true,
-          filterTypes: ['hidden_files', 'print_start_time']
+          filterTypes: ['hidden_files', 'print_start_time', 'moonraker_temporary_upload_files']
         }
       case 'config':
         return {
@@ -119,7 +120,7 @@ export const getters: GetterTree<FilesState, RootState> = {
           accepts: ['.conf', '.cfg', '.md', '.css', '.jpg', '.jpeg', '.png', '.gif'],
           canView,
           canConfigure: false,
-          filterTypes: ['hidden_files', 'klipper_backup_files']
+          filterTypes: ['hidden_files', 'klipper_backup_files', 'moonraker_backup_files', 'moonraker_temporary_upload_files', 'crowsnest_backup_files']
         }
       case 'config_examples':
         return {
@@ -151,7 +152,7 @@ export const getters: GetterTree<FilesState, RootState> = {
           accepts: [],
           canView,
           canConfigure: false,
-          filterTypes: ['hidden_files']
+          filterTypes: ['hidden_files', 'moonraker_temporary_upload_files']
         }
       default:
         return {

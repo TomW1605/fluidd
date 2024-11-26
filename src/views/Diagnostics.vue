@@ -51,7 +51,7 @@
           >
             <transition-group
               type="transition"
-              :name="!inLayout ? 'flip-list' : null"
+              :name="!inLayout ? 'flip-list' : undefined"
             >
               <template v-for="c in container">
                 <diagnostics-card
@@ -158,7 +158,7 @@ export default class Diagnostics extends Mixins(StateMixin) {
   }
 
   get inLayout (): boolean {
-    return (this.$store.state.config.layoutMode)
+    return this.$store.state.config.layoutMode
   }
 
   get layout (): DiagnosticsCardContainer {

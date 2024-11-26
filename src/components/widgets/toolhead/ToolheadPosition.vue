@@ -9,57 +9,69 @@
         cols="3"
         class="pr-1"
       >
-        <v-text-field
+        <app-text-field
           :color="(forceMove) ? 'error' : 'primary'"
           :label="`X [ ${livePosition[0].toFixed(2)} ]`"
+          :rules="[
+            $rules.required,
+            $rules.numberValid
+          ]"
           outlined
+          persistent-placeholder
           hide-details
           dense
-          class="v-input--width-small"
+          small
           type="number"
           :disabled="!klippyReady || (!xHomed && !xForceMove)"
-          :readonly="printerBusy"
+          :readonly="printerPrinting"
           :value="(useGcodeCoords) ? gcodePosition[0].toFixed(2) : toolheadPosition[0].toFixed(2)"
-          @change="moveTo('X', $event)"
-          @focus="$event.target.select()"
+          @submit="moveAxisTo('X', +$event)"
         />
       </v-col>
       <v-col
         cols="3"
         class="pr-1 pl-1"
       >
-        <v-text-field
+        <app-text-field
           :color="(forceMove) ? 'error' : 'primary'"
           :label="`Y [ ${livePosition[1].toFixed(2)} ]`"
+          :rules="[
+            $rules.required,
+            $rules.numberValid
+          ]"
           outlined
+          persistent-placeholder
           hide-details
           dense
-          class="v-input--width-small"
+          small
           type="number"
           :disabled="!klippyReady || (!yHomed && !yForceMove)"
-          :readonly="printerBusy"
+          :readonly="printerPrinting"
           :value="(useGcodeCoords) ? gcodePosition[1].toFixed(2) : toolheadPosition[1].toFixed(2)"
-          @change="moveTo('Y', $event)"
-          @focus="$event.target.select()"
+          @submit="moveAxisTo('Y', +$event)"
         />
       </v-col>
       <v-col
         cols="3"
         class="pr-1 pl-1"
       >
-        <v-text-field
+        <app-text-field
           :color="(forceMove) ? 'error' : 'primary'"
-          :label="`Z [ ${livePosition[2].toFixed(2)} ]`"
+          :label="`Z [ ${livePosition[2].toFixed(3)} ]`"
+          :rules="[
+            $rules.required,
+            $rules.numberValid
+          ]"
           outlined
+          persistent-placeholder
           hide-details
           dense
-          class="v-input--width-small"
+          small
           type="number"
           :disabled="!klippyReady || (!zHomed && !zForceMove)"
-          :readonly="printerBusy"
-          :value="(useGcodeCoords) ? gcodePosition[2].toFixed(2) : toolheadPosition[2].toFixed(2)"
-          @change="moveTo('Z', $event)"
-          @focus="$event.target.select()"
+          :readonly="printerPrinting"
+          :value="(useGcodeCoords) ? gcodePosition[2].toFixed(3) : toolheadPosition[2].toFixed(3)"
+          @submit="moveAxisTo('Z', +$event)"
         />
       </v-col>
       <v-col
@@ -70,15 +82,14 @@
           v-model="positioning"
           mandatory
           dense
-          class="d-block"
+          class="elevation-2 d-flex"
         >
           <v-tooltip top>
             <template #activator="{ on, attrs }">
               <app-btn
                 v-bind="attrs"
                 class="positioning-toggle-button"
-                :disabled="!klippyReady || printerBusy"
-                :elevation="2"
+                :disabled="!klippyReady || printerPrinting"
                 v-on="on"
               >
                 <v-icon small>
@@ -93,8 +104,7 @@
               <app-btn
                 v-bind="attrs"
                 class="positioning-toggle-button"
-                :disabled="!klippyReady || printerBusy"
-                :elevation="2"
+                :disabled="!klippyReady || printerPrinting"
                 v-on="on"
               >
                 <v-icon small>
@@ -107,28 +117,6 @@
         </v-btn-toggle>
       </v-col>
     </v-row>
-
-    <v-row
-      v-show="printerPrinting"
-      justify="space-between"
-      align="center"
-      no-gutters
-    >
-      <v-col
-        cols="auto"
-        class="secondary--text text--lighten-1"
-      >
-        {{ $t('app.general.label.requested_speed') }} [ {{ liveVelocity.toFixed(2) }} mm/s ]
-      </v-col>
-      <v-col
-        cols="auto"
-        class="focus--text"
-      >
-        {{ requestedSpeed }} mm/s
-      </v-col>
-    </v-row>
-
-    <!-- </div> -->
   </div>
 </template>
 
@@ -136,6 +124,14 @@
 import { Component, Mixins } from 'vue-property-decorator'
 import StateMixin from '@/mixins/state'
 import ToolheadMixin from '@/mixins/toolhead'
+
+type Axis = 'X' | 'Y' | 'Z'
+
+const axisIndexMap: Record<Axis, number> = {
+  X: 0,
+  Y: 1,
+  Z: 2
+}
 
 @Component({})
 export default class ToolheadPosition extends Mixins(StateMixin, ToolheadMixin) {
@@ -151,15 +147,11 @@ export default class ToolheadPosition extends Mixins(StateMixin, ToolheadMixin) 
     return this.$store.state.printer.printer.motion_report.live_position
   }
 
-  get liveVelocity () {
-    return this.$store.state.printer.printer.motion_report.live_velocity
-  }
-
-  get useGcodeCoords () {
+  get useGcodeCoords (): boolean {
     return this.$store.state.config.uiSettings.general.useGcodeCoords
   }
 
-  get forceMove () {
+  get forceMove (): boolean {
     return this.$store.state.config.uiSettings.toolhead.forceMove
   }
 
@@ -175,14 +167,6 @@ export default class ToolheadPosition extends Mixins(StateMixin, ToolheadMixin) 
     return this.forceMove && !this.zHasMultipleSteppers
   }
 
-  get requestedSpeed () {
-    // Take into account the speed multiplier.
-    const multiplier = this.$store.state.printer.printer.gcode_move.speed_factor || 1
-    let speed = this.$store.state.printer.printer.gcode_move.speed || 0
-    speed = (speed * multiplier) / 60
-    return speed.toFixed()
-  }
-
   get usesAbsolutePositioning () {
     return this.$store.state.printer.printer.gcode_move.absolute_coordinates
   }
@@ -195,23 +179,29 @@ export default class ToolheadPosition extends Mixins(StateMixin, ToolheadMixin) 
     this.sendGcode(`G9${value}`)
   }
 
-  moveTo (axis: string, pos: string) {
-    const axisIndexMap: any = { X: 0, Y: 1, Z: 2 }
-    const currentPos = (this.useGcodeCoords)
-      ? this.gcodePosition[axisIndexMap[axis]]
-      : this.toolheadPosition[axisIndexMap[axis]]
-    if (parseInt(currentPos) !== parseInt(pos)) {
-      const rate = (axis.toLowerCase() === 'z')
+  moveAxisTo (axis: Axis, pos: number) {
+    const axisIndex = axisIndexMap[axis]
+    const currentPos = this.useGcodeCoords
+      ? this.gcodePosition[axisIndex]
+      : this.toolheadPosition[axisIndex]
+
+    if (currentPos !== pos) {
+      const rate: number = axis === 'Z'
         ? this.$store.state.config.uiSettings.general.defaultToolheadZSpeed
         : this.$store.state.config.uiSettings.general.defaultToolheadXYSpeed
+
       if (this.forceMove) {
-        const accel = (axis.toLowerCase() === 'z')
+        const accel = axis === 'Z'
           ? this.$store.getters['printer/getPrinterSettings']('printer.max_z_accel')
           : this.$store.state.printer.printer.toolhead.max_accel
         this.sendGcode(`FORCE_MOVE STEPPER=stepper_${axis.toLowerCase()} DISTANCE=${pos} VELOCITY=${rate} ACCEL=${accel}`)
       } else {
-        this.sendGcode(`G90
-        G1 ${axis}${pos} F${rate * 60}`)
+        this.sendMoveGcode(
+          {
+            [axis]: pos
+          },
+          rate,
+          true)
       }
     }
   }

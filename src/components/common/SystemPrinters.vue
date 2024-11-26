@@ -52,8 +52,8 @@
 </template>
 
 <script lang="ts">
-import { Component, Mixins } from 'vue-property-decorator'
-import type { InitConfig, InstanceConfig } from '@/store/config/types'
+import { Component, Mixins, Watch } from 'vue-property-decorator'
+import type { InstanceConfig } from '@/store/config/types'
 import StateMixin from '@/mixins/state'
 import { appInit } from '@/init'
 
@@ -61,7 +61,7 @@ import { appInit } from '@/init'
 export default class SystemPrinters extends Mixins(StateMixin) {
   instanceDialogOpen = false
 
-  get instanceName () {
+  get instanceName (): string {
     return this.$store.state.config.uiSettings.general.instanceName
   }
 
@@ -69,22 +69,31 @@ export default class SystemPrinters extends Mixins(StateMixin) {
     return this.$store.getters['config/getInstances']
   }
 
-  mounted () {
-    // If we have no api's configured at all, open the dialog.
-    if (this.$store.state.config.apiUrl === '') {
-      this.instanceDialogOpen = true
+  @Watch('appReady')
+  onAppReady (value: boolean) {
+    if (value) {
+      if (this.$store.state.config.apiUrl === '') {
+        this.instanceDialogOpen = true
+      }
     }
   }
 
-  removeInstance (instance: InstanceConfig) {
-    this.$store.dispatch('config/removeInstance', instance)
+  async removeInstance (instance: InstanceConfig) {
+    const result = await this.$confirm(
+      this.$t('app.general.simple_form.msg.confirm_remove_printer', { name: instance.name }).toString(),
+      { title: this.$tc('app.general.label.confirm'), color: 'card-heading', icon: '$error' }
+    )
+
+    if (result) {
+      this.$store.dispatch('config/removeInstance', instance)
+    }
   }
 
   addInstanceDialog () {
     this.instanceDialogOpen = true
   }
 
-  activateInstance (instance: InstanceConfig) {
+  async activateInstance (instance: InstanceConfig) {
     // Close the drawer
     this.$emit('click')
     if (!instance.active) {
@@ -92,13 +101,12 @@ export default class SystemPrinters extends Mixins(StateMixin) {
       this.$socket.close()
 
       // Re-init the app.
-      appInit(instance, this.$store.state.config.hostConfig)
-        .then((config: InitConfig) => {
-          // Reconnect the socket with the new instance url.
-          if (config.apiConfig.socketUrl && config.apiConnected && config.apiAuthenticated) {
-            this.$socket.connect(config.apiConfig.socketUrl)
-          }
-        })
+      const config = await appInit(instance, this.$store.state.config.hostConfig)
+
+      // Reconnect the socket with the new instance url.
+      if (config.apiConfig.socketUrl && config.apiConnected && config.apiAuthenticated) {
+        this.$socket.connect(config.apiConfig.socketUrl)
+      }
     }
   }
 }

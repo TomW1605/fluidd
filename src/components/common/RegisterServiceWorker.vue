@@ -45,11 +45,12 @@ export default class RegisterServiceWorker extends Vue {
     consola.debug('[PWA] registered', registration)
   }
 
-  onRegisterError (e: any) {
+  onRegisterError (e: unknown) {
     consola.error('[PWA] registration error', e)
   }
 
   updateServiceWorker () {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     this.updateSW && this.updateSW(true)
   }
 

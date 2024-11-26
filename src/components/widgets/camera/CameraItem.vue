@@ -37,7 +37,7 @@
       v-if="!fullscreen && (fullscreenMode === 'embed' || !rawCameraUrl) && camera.service !== 'device'"
       class="camera-fullscreen"
     >
-      <a :href="`/#/camera/${camera.id}`">
+      <a :href="`/#/camera/${encodeURI(camera.uid)}`">
         <v-icon>$fullScreen</v-icon>
       </a>
     </div>
@@ -57,7 +57,7 @@
 
 <script lang="ts">
 import { Component, Vue, Prop, Watch, Ref } from 'vue-property-decorator'
-import type { CameraConfig } from '@/store/cameras/types'
+import type { WebcamConfig } from '@/store/webcams/types'
 import type { CameraFullscreenAction } from '@/store/config/types'
 import { CameraComponents } from '@/dynamicImports'
 import CameraMixin from '@/mixins/camera'
@@ -65,10 +65,10 @@ import CameraMixin from '@/mixins/camera'
 @Component({})
 export default class CameraItem extends Vue {
   @Prop({ type: Object, required: true })
-  readonly camera!: CameraConfig
+  readonly camera!: WebcamConfig
 
-  @Prop({ type: Boolean, required: false, default: false })
-  readonly fullscreen!: boolean
+  @Prop({ type: Boolean })
+  readonly fullscreen?: boolean
 
   @Prop({ type: String })
   readonly crossorigin?: 'anonymous' | 'use-credentials' | ''
@@ -77,7 +77,7 @@ export default class CameraItem extends Vue {
   readonly componentInstance!: CameraMixin
 
   rawCameraUrl: string | null = null
-  framesPerSecond : string | null = null
+  framesPerSecond: string | null = null
 
   mounted () {
     this.setupFrameEvents()
@@ -116,7 +116,7 @@ export default class CameraItem extends Vue {
 
   get cameraComponent () {
     if (this.camera.service) {
-      const componentName = `${this.$filters.startCase(this.camera.service).replace(' ', '')}Camera`
+      const componentName = `${this.$filters.startCase(this.camera.service).replace(/ /g, '')}Camera`
 
       if (componentName in CameraComponents) {
         return CameraComponents[componentName]
@@ -130,9 +130,11 @@ export default class CameraItem extends Vue {
   .camera-image {
     display: block;
     max-width: 100%;
-    max-height: calc(100vh - 56px - 32px);
+    max-height: calc(100vh - 130px);
+    max-height: calc(100svh - 130px);
     white-space: nowrap;
     margin: auto;
+    pointer-events: none;
   }
 
   .camera-container {

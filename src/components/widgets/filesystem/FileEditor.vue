@@ -19,7 +19,7 @@
 import { Component, Prop, Ref, Mixins } from 'vue-property-decorator'
 import BrowserMixin from '@/mixins/browser'
 import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api'
-import md5AsBase64 from '@/util/md5-as-base64'
+import md5 from 'md5'
 import type { InstanceConfig, RestoreViewState } from '@/store/config/types'
 import consola from 'consola'
 let monaco: typeof Monaco // dynamically imported
@@ -32,11 +32,11 @@ export default class FileEditor extends Mixins(BrowserMixin) {
   @Prop({ type: String, required: true })
   readonly filename!: string
 
-  @Prop({ type: Boolean, default: false })
-  readonly readonly!: boolean
+  @Prop({ type: Boolean })
+  readonly readonly?: boolean
 
   @Prop({ type: Boolean, default: true })
-  readonly codeLens!: boolean
+  readonly codeLens?: boolean
 
   @Prop({ type: String, required: true })
   readonly path!: string
@@ -50,7 +50,7 @@ export default class FileEditor extends Mixins(BrowserMixin) {
   editor: Monaco.editor.IStandaloneCodeEditor | null = null
 
   get restoreViewState (): RestoreViewState {
-    return this.$store.state.config.uiSettings.editor.restoreViewState as RestoreViewState
+    return this.$store.state.config.uiSettings.editor.restoreViewState
   }
 
   get activeInstance (): InstanceConfig {
@@ -110,6 +110,15 @@ export default class FileEditor extends Mixins(BrowserMixin) {
       }
     })
 
+    this.editor.addAction({
+      id: 'action-emergency-stop',
+      label: this.$tc('app.general.tooltip.estop'),
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyE],
+      run: () => {
+        this.$emit('emergency-stop')
+      }
+    })
+
     const filename = this.path ? `${this.path}/${this.filename}` : this.filename
     const apiFileUrl = `${this.activeInstance.apiUrl}/server/files/${filename}`
 
@@ -124,7 +133,7 @@ export default class FileEditor extends Mixins(BrowserMixin) {
     const restoreViewStateStorage = this.restoreViewStateStorage
 
     if (restoreViewStateStorage) {
-      this.viewStateHash = 'monaco.' + md5AsBase64(apiFileUrl)
+      this.viewStateHash = 'monaco.' + md5(apiFileUrl)
 
       const viewState = restoreViewStateStorage.getItem(this.viewStateHash)
 

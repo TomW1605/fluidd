@@ -47,7 +47,7 @@ export default class DiagnosticsCard extends Mixins(BrowserMixin) {
   }
 
   get options () {
-    const isDark = this.$store.state.config.uiSettings.theme.isDark
+    const isDark: boolean = this.$store.state.config.uiSettings.theme.isDark
 
     const fontColor = (isDark) ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)'
     const fontSize = (this.isMobileViewport) ? 13 : 14
@@ -81,10 +81,10 @@ export default class DiagnosticsCard extends Mixins(BrowserMixin) {
       }
     }
 
-    const theme = this.$store.getters['config/getTheme']
+    const theme = this.$vuetify.theme.currentTheme
     const color = [
-      theme.currentTheme.primary,
-      theme.currentTheme.secondary
+      theme.primary,
+      theme.secondary
     ]
 
     const series = this.series
@@ -92,6 +92,9 @@ export default class DiagnosticsCard extends Mixins(BrowserMixin) {
     const options = {
       grid,
       color,
+      textStyle: {
+        fontFamily: 'Roboto'
+      },
       legend: {
         show: false
       },

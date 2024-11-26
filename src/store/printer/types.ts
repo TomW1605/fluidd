@@ -1,9 +1,22 @@
 export interface PrinterState {
-  printer: Printer;
+  info: PrinterInfo;
+  printer: Record<string, any>;
 }
 
-export interface Printer {
-  [key: string]: any;
+export interface PrinterInfo {
+  state: string;
+  state_message: string;
+  hostname?: string;
+  klipper_path?: string;
+  python_path?: string;
+  process_id?: number;
+  user_id?: number;
+  group_id?: number;
+  log_file?: string;
+  config_file?: string;
+  software_version?: string;
+  cpu_info?: string
+  app?: string;
 }
 
 export interface KnownExtruder {
@@ -56,14 +69,10 @@ export type StepperType<T = Record<string, any>> = {
 
 export interface MCU {
   name: string;
-  last_stats: MCUData;
-  mcu_build_versions: string;
-  mcu_constants: MCUData;
-  mcu_version: string;
-}
-
-export interface MCUData {
-  [index: string]: string | number;
+  last_stats?: Record<string, string | number>;
+  mcu_build_versions?: string;
+  mcu_constants?: Record<string, string | number>;
+  mcu_version?: string;
 }
 
 export type OutputType<T = Record<string, any>> = {
@@ -110,17 +119,18 @@ export interface OutputPin extends OutputType<OutputPinConfig> {
   scale: number;
   static: number;
   value: number;
+  resetValue: number;
 }
 
 export interface OutputPinConfig {
-  [index: string]: string | undefined;
-  pwm?: string;
-  static_value?: string;
-  value?: string;
-  shutdown_value?: string;
-  cycle_time?: string;
-  hardware_pwm?: string;
-  scale?: string;
+  [index: string]: string | number | boolean | undefined;
+  pwm?: boolean;
+  static_value?: number;
+  value?: number;
+  shutdown_value?: number;
+  cycle_time?: number;
+  hardware_pwm?: boolean;
+  scale?: number;
 }
 
 export interface Sensor {
@@ -159,6 +169,34 @@ export interface Probe {
 
 export type ProbeName = 'bltouch' | 'smart_effector' | 'probe'
 
+export interface BedScrews {
+  key: string;
+  name: string;
+  prettyName: string;
+  fine: number;
+  x: number;
+  y: number;
+}
+
+export interface ScrewsTiltAdjust {
+  error: boolean;
+  max_deviation?: number | null;
+  screws: ScrewsTiltAdjustScrew[]
+}
+
+export interface ScrewsTiltAdjustScrew {
+  key: string;
+  name: string;
+  prettyName: string;
+  adjustMinutes: number;
+  x: number;
+  y: number;
+  z: number;
+  sign: 'CW' | 'CCW';
+  adjust: string;
+  is_base: boolean;
+}
+
 // printer.mcu[num]
 export interface KlipperMcu {
   last_stats: KlipperMcuStats;
@@ -196,4 +234,61 @@ export interface SystemStats {
   cputime: number;
   memavail: number;
   sysload: number;
+}
+
+export interface BedSize {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export interface GcodeCommands {
+  [key: string]: GcodeCommand
+}
+
+export interface GcodeCommand {
+  help?: string
+}
+
+export interface TimeEstimates {
+  progress: number;
+  printDuration: number;
+  totalDuration: number;
+  fileLeft: number;
+  slicerLeft: number;
+  actualLeft: number;
+  eta: number;
+}
+
+export interface BeaconState {
+  last_sample?: BeaconLastSample | null;
+  last_received_sample?: BeaconLastReceivedSample | null;
+  last_z_result?: number | null,
+  last_probe_position?: [number, number] | null,
+  last_probe_result?: number | null,
+  last_offset_result?: number | null,
+  last_poke_result?: number | null
+  model?: string | null;
+}
+
+export interface BeaconLastSample {
+  time: number;
+  value: number;
+  temp: number;
+  dist?: number | null;
+}
+
+export interface BeaconLastReceivedSample {
+  temp: number;
+  clock: number;
+  time: number;
+  data: number;
+  data_smooth: number;
+  freq: number;
+}
+
+export interface BeaconModel {
+  name: string;
+  active: boolean;
 }

@@ -44,8 +44,22 @@
             $circle
           </v-icon>
         </v-toolbar-title>
+
         <v-spacer />
+
         <v-toolbar-items>
+          <app-btn
+            v-if="!$vuetify.breakpoint.smAndDown"
+            @click="peripheralsDialogOpen = true"
+          >
+            <v-icon
+              small
+              left
+            >
+              $devices
+            </v-icon>
+            <span>{{ $t('app.file_system.title.devices') }}</span>
+          </app-btn>
           <app-btn
             v-if="!useTextOnlyEditor"
             @click="handleCommandPalette"
@@ -121,6 +135,7 @@
         :code-lens="codeLens"
         @ready="editorReady = true"
         @save="emitSave(false)"
+        @emergency-stop="emergencyStop"
       />
 
       <file-editor-text-only
@@ -129,6 +144,11 @@
         :filename="filename"
         :readonly="readonly"
         @ready="editorReady = true"
+      />
+
+      <peripherals-dialog
+        v-if="peripheralsDialogOpen"
+        v-model="peripheralsDialogOpen"
       />
     </v-card>
   </v-dialog>
@@ -149,8 +169,8 @@ import isWebAssemblySupported from '@/util/is-web-assembly-supported'
   }
 })
 export default class FileEditorDialog extends Mixins(StateMixin, BrowserMixin) {
-  @VModel({ type: Boolean, required: true })
-    open!: boolean
+  @VModel({ type: Boolean })
+  open?: boolean
 
   @Prop({ type: String, required: true })
   readonly root!: string
@@ -164,11 +184,11 @@ export default class FileEditorDialog extends Mixins(StateMixin, BrowserMixin) {
   @Prop({ type: String, required: true })
   readonly contents!: string
 
-  @Prop({ type: Boolean, default: false })
-  readonly loading!: boolean
+  @Prop({ type: Boolean })
+  readonly loading?: boolean
 
-  @Prop({ type: Boolean, default: false })
-  readonly readonly!: boolean
+  @Prop({ type: Boolean })
+  readonly readonly?: boolean
 
   @Ref('editor')
   readonly editor?: FileEditor
@@ -176,6 +196,7 @@ export default class FileEditorDialog extends Mixins(StateMixin, BrowserMixin) {
   updatedContent: string | null = null
   lastSavedContent: string | null = null
   editorReady = false
+  peripheralsDialogOpen = false
 
   get ready () {
     return (
@@ -208,7 +229,7 @@ export default class FileEditorDialog extends Mixins(StateMixin, BrowserMixin) {
     return this.$store.getters['server/getConfigMapByFilename'](this.filename)
   }
 
-  get codeLens () {
+  get codeLens (): boolean {
     return this.$store.state.config.uiSettings.editor.codeLens
   }
 
@@ -226,22 +247,26 @@ export default class FileEditorDialog extends Mixins(StateMixin, BrowserMixin) {
   }
 
   get showDirtyEditorWarning () {
-    return this.$store.state.config.uiSettings.editor.confirmDirtyEditorClose && this.updatedContent !== this.lastSavedContent
+    const confirmDirtyEditorClose: boolean = this.$store.state.config.uiSettings.editor.confirmDirtyEditorClose
+
+    return (
+      confirmDirtyEditorClose &&
+      this.updatedContent !== this.lastSavedContent
+    )
   }
 
   async emitClose () {
-    if (this.showDirtyEditorWarning) {
-      const result = await this.$confirm(
+    const result = (
+      !this.showDirtyEditorWarning ||
+      await this.$confirm(
         this.$tc('app.general.simple_form.msg.unsaved_changes'),
         { title: this.$tc('app.general.label.unsaved_changes'), color: 'card-heading', icon: '$error' }
       )
+    )
 
-      if (!result) {
-        return
-      }
+    if (result) {
+      this.open = false
     }
-
-    this.open = false
   }
 
   handleBeforeUnload (event: Event) {

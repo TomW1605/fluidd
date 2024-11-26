@@ -66,7 +66,6 @@ app:
     filters:
       label:
         print_start_time: Filter printed
-        print_start_time_desc: Filters out items you've already printed.
     label:
       dir_name: اسم المجلد
       disk_usage: استخدام قرص التخزين
@@ -217,7 +216,6 @@ app:
       uncategorized: غير مصنف
       unretract_speed: سرعة الكسر
       used: مستخدم
-      variance: التباين
       velocity: السرعة
       visible: ظاهر
       z_offset: موازنة Z
@@ -366,7 +364,8 @@ app:
   socket:
     msg:
       connecting: Connecting to moonraker...
-      no_connection: No moonraker connection. Please check moonraker status and / or refresh.
+      no_connection: No moonraker connection. Please check moonraker status and /
+        or refresh.
   system_info:
     label:
       capacity: السعة

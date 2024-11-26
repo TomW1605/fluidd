@@ -8,8 +8,8 @@
     <svg
       ref="svg"
       :viewBox="svgViewBox"
-      :height="height"
-      :width="width"
+      height="100%"
+      width="100%"
       xmlns="http://www.w3.org/2000/svg"
       xmlns:xlink="http://www.w3.org/1999/xlink"
     >
@@ -29,6 +29,16 @@
             :fill-opacity="disabled ? 0.6 : undefined"
           />
         </pattern>
+        <clipPath
+          v-if="hasRoundBed"
+          id="clipCircle"
+        >
+          <circle
+            :r="bedSize.maxX"
+            cx="0"
+            cy="0"
+          />
+        </clipPath>
         <svg
           id="retraction"
           :width="retractionIconSize"
@@ -71,39 +81,57 @@
             :shape-rendering="shapeRendering"
           />
         </svg>
-      </defs>
-      <g :transform="flipTransform">
-        <clipPath id="clipCircle">
+        <svg
+          id="origin"
+          width="12"
+          height="12"
+          viewBox="-2 -2 12 12"
+        >
+          <path
+            fill="#ff0000"
+            fill-opacity="0.4"
+            d="M 8.5859375 -1.4140625 L 8.2324219 -1.0605469 L 9.0429688 -0.25 L 0.96875 -0.25 A 1 1 0 0 1 1 0 A 1 1 0 0 1 0.96679688 0.25 L 9.0429688 0.25 L 8.2324219 1.0605469 L 8.5859375 1.4140625 L 10 0 L 8.5859375 -1.4140625 z "
+            :shape-rendering="shapeRendering"
+          />
+          <path
+            fill="#00ff00"
+            fill-opacity="0.4"
+            d="M -0.25 0.96679688 L -0.25 9.0429688 L -1.0605469 8.2324219 L -1.4140625 8.5859375 L 0 10 L 1.4140625 8.5859375 L 1.0605469 8.2324219 L 0.25 9.0429688 L 0.25 0.96679688 A 1 1 0 0 1 0 1 A 1 1 0 0 1 -0.25 0.96679688 z "
+            :shape-rendering="shapeRendering"
+          />
           <circle
-            :r="bedSize.x.max"
+            fill="#0000ff"
+            fill-opacity="0.4"
             cx="0"
             cy="0"
+            r="1"
+            :shape-rendering="shapeRendering"
           />
-        </clipPath>
+        </svg>
+      </defs>
+      <g :transform="flipTransform">
         <g
           v-if="drawBackground"
           id="background"
         >
           <rect
-            v-if="isDelta"
-            :height="bedSize.y.max - bedSize.y.min"
-            :width="bedSize.x.max - bedSize.x.min"
+            :height="bedSize.maxY - bedSize.minY"
+            :width="bedSize.maxX - bedSize.minX"
             fill="url(#backgroundPattern)"
-            clip-path="url(#clipCircle)"
-            :x="bedSize.x.min"
-            :y="bedSize.y.min"
+            :clip-path="hasRoundBed ? 'url(#clipCircle)' : undefined"
+            :x="bedSize.minX"
+            :y="bedSize.minY"
           />
-          <rect
-            v-else
-            :height="bedSize.y.max - bedSize.y.min"
-            :width="bedSize.x.max - bedSize.x.min"
-            fill="url(#backgroundPattern)"
-            :x="bedSize.x.min"
-            :y="bedSize.y.min"
+        </g>
+        <g v-if="drawOrigin">
+          <use
+            xlink:href="#origin"
+            x="-2"
+            y="-2"
           />
         </g>
         <g
-          v-if="getViewerOption('showParts') && !showExcludeObjects && svgPathParts.length > 0"
+          v-if="showParts && !showExcludeObjects && svgPathParts.length > 0"
           id="parts"
         >
           <path
@@ -115,7 +143,7 @@
           />
         </g>
         <g
-          v-if="getViewerOption('showPreviousLayer')"
+          v-if="showPreviousLayer"
           id="previousLayer"
           class="layer"
         >
@@ -128,7 +156,7 @@
           />
         </g>
         <g
-          v-if="getViewerOption('showCurrentLayer')"
+          v-if="showCurrentLayer"
           id="activeLayer"
           class="layer"
         >
@@ -145,14 +173,14 @@
           class="layer"
         >
           <path
-            v-if="getViewerOption('showExtrusions')"
+            v-if="showExtrusions"
             :d="svgPathCurrent.extrusions"
             :stroke="themeIsDark ? 'white' : 'black'"
             :stroke-width="extrusionLineWidth"
             :shape-rendering="shapeRendering"
           />
           <path
-            v-if="getViewerOption('showMoves')"
+            v-if="showMoves"
             :d="svgPathCurrent.moves"
             stroke="gray"
             :stroke-width="moveLineWidth"
@@ -168,7 +196,7 @@
           />
 
           <g
-            v-if="getViewerOption('showRetractions') && svgPathCurrent.retractions.length > 0"
+            v-if="showRetractions && svgPathCurrent.retractions.length > 0"
             id="retractions"
           >
             <use
@@ -182,7 +210,7 @@
           </g>
 
           <g
-            v-if="getViewerOption('showRetractions') && svgPathCurrent.retractions.length > 0"
+            v-if="showRetractions && svgPathCurrent.extrusionStarts.length > 0"
             id="extrusionStarts"
           >
             <use
@@ -196,7 +224,7 @@
           </g>
         </g>
         <g
-          v-if="getViewerOption('showNextLayer')"
+          v-if="showNextLayer"
           id="nextLayer"
           class="layer"
         >
@@ -209,7 +237,7 @@
           />
         </g>
         <exclude-objects
-          v-if="getViewerOption('showParts') && showExcludeObjects"
+          v-if="showParts && showExcludeObjects"
           :shape-rendering="shapeRendering"
           @cancel="$emit('cancelObject', $event)"
         />
@@ -225,49 +253,49 @@
       @touchend="panzoom?.resume()"
     >
       <gcode-preview-button
-        name="followProgress"
+        v-model="followProgress"
         icon="$play"
         :tooltip="$t('app.gcode.label.follow_progress')"
       />
 
       <gcode-preview-button
-        name="showPreviousLayer"
+        v-model="showPreviousLayer"
         icon="$previousLayer"
         :tooltip="$t('app.gcode.label.show_previous_layer')"
       />
 
       <gcode-preview-button
-        name="showCurrentLayer"
+        v-model="showCurrentLayer"
         icon="$currentLayer"
         :tooltip="$t('app.gcode.label.show_current_layer')"
       />
 
       <gcode-preview-button
-        name="showNextLayer"
+        v-model="showNextLayer"
         icon="$nextLayer"
         :tooltip="$t('app.gcode.label.show_next_layer')"
       />
 
       <gcode-preview-button
-        name="showMoves"
+        v-model="showMoves"
         icon="$moves"
         :tooltip="$t('app.gcode.label.show_moves')"
       />
 
       <gcode-preview-button
-        name="showExtrusions"
+        v-model="showExtrusions"
         icon="$extrusions"
         :tooltip="$t('app.gcode.label.show_extrusions')"
       />
 
       <gcode-preview-button
-        name="showRetractions"
+        v-model="showRetractions"
         icon="$retractions"
         :tooltip="$t('app.gcode.label.show_retractions')"
       />
 
       <gcode-preview-button
-        name="showParts"
+        v-model="showParts"
         icon="$parts"
         :tooltip="$t('app.gcode.label.show_parts')"
       />
@@ -294,12 +322,12 @@ import { Component, Mixins, Prop, Ref, Watch } from 'vue-property-decorator'
 import StateMixin from '@/mixins/state'
 import BrowserMixin from '@/mixins/browser'
 import panzoom, { type PanZoom } from 'panzoom'
-import type { BBox, LayerNr, LayerPaths } from '@/store/gcodePreview/types'
-import type { GcodePreviewConfig } from '@/store/config/types'
+import type { BBox, Layer, LayerNr, LayerPaths } from '@/store/gcodePreview/types'
 import AppFocusableContainer from '@/components/ui/AppFocusableContainer.vue'
 import ExcludeObjects from '@/components/widgets/exclude-objects/ExcludeObjects.vue'
 import GcodePreviewButton from './GcodePreviewButton.vue'
 import type { AppFile } from '@/store/files/types'
+import type { BedSize } from '@/store/printer/types'
 
 @Component({
   components: {
@@ -308,14 +336,8 @@ import type { AppFile } from '@/store/files/types'
   }
 })
 export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
-  @Prop({ type: Boolean, default: true })
-  readonly disabled!: boolean
-
-  @Prop({ type: String })
-  readonly width!: string
-
-  @Prop({ type: String })
-  readonly height!: string
+  @Prop({ type: Boolean })
+  readonly disabled?: boolean
 
   @Prop({ type: Number, default: Infinity })
   readonly progress!: number
@@ -335,15 +357,6 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
 
   panning = false
 
-  get isDelta (): boolean {
-    const kinematics = this.$store.getters['printer/getPrinterSettings']('printer.kinematics')
-    return kinematics === 'delta' || kinematics === 'rotary_delta'
-  }
-
-  get printerRadius (): number {
-    return this.$store.getters['printer/getPrinterSettings']('printer.print_radius') ?? 100.0
-  }
-
   get themeIsDark (): boolean {
     return this.$store.state.config.uiSettings.theme.isDark
   }
@@ -352,28 +365,32 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
     return this.$store.state.printer.printer.virtual_sdcard.file_position
   }
 
-  get extrusionLineWidth () {
-    return this.getUiSetting('extrusionLineWidth')
+  get extrusionLineWidth (): number {
+    return this.$store.state.config.uiSettings.gcodePreview.extrusionLineWidth
   }
 
-  get moveLineWidth () {
-    return this.getUiSetting('moveLineWidth')
+  get moveLineWidth (): number {
+    return this.$store.state.config.uiSettings.gcodePreview.moveLineWidth
   }
 
-  get retractionIconSize () {
-    return this.getUiSetting('retractionIconSize')
+  get retractionIconSize (): number {
+    return this.$store.state.config.uiSettings.gcodePreview.retractionIconSize
   }
 
-  get drawBackground () {
-    return this.getUiSetting('drawBackground')
+  get drawBackground (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.drawBackground
   }
 
-  get showAnimations () {
-    return this.getUiSetting('showAnimations')
+  get drawOrigin (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.drawOrigin
   }
 
-  get autoZoom () {
-    return this.getUiSetting('autoZoom')
+  get showAnimations (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showAnimations
+  }
+
+  get autoZoom (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.autoZoom
   }
 
   set autoZoom (value: boolean) {
@@ -386,6 +403,102 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
     this.reset()
   }
 
+  get followProgress (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.followProgress
+  }
+
+  set followProgress (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.followProgress',
+      value,
+      server: true
+    })
+  }
+
+  get showPreviousLayer (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showPreviousLayer
+  }
+
+  set showPreviousLayer (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showPreviousLayer',
+      value,
+      server: true
+    })
+  }
+
+  get showCurrentLayer (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showCurrentLayer
+  }
+
+  set showCurrentLayer (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showCurrentLayer',
+      value,
+      server: true
+    })
+  }
+
+  get showNextLayer (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showNextLayer
+  }
+
+  set showNextLayer (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showNextLayer',
+      value,
+      server: true
+    })
+  }
+
+  get showMoves (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showMoves
+  }
+
+  set showMoves (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showMoves',
+      value,
+      server: true
+    })
+  }
+
+  get showExtrusions (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showExtrusions
+  }
+
+  set showExtrusions (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showExtrusions',
+      value,
+      server: true
+    })
+  }
+
+  get showRetractions (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showRetractions
+  }
+
+  set showRetractions (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showRetractions',
+      value,
+      server: true
+    })
+  }
+
+  get showParts (): boolean {
+    return this.$store.state.config.uiSettings.gcodePreview.showParts
+  }
+
+  set showParts (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.gcodePreview.showParts',
+      value,
+      server: true
+    })
+  }
+
   get shapeRendering () {
     return this.panning ? 'optimizeSpeed' : 'geometricPrecision'
   }
@@ -393,15 +506,18 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
   get showExcludeObjects () {
     if (!this.klippyReady || !(this.printerPrinting || this.printerPaused)) return false
 
-    const file = this.$store.getters['gcodePreview/getFile']
+    const file = this.$store.getters['gcodePreview/getFile'] as AppFile | undefined
+
     if (!file) {
       return true
     }
-    const printerFile = this.$store.state.printer.printer.current_file
+
+    const printerFile: AppFile = this.$store.state.printer.printer.current_file
 
     if (printerFile.filename) {
-      return (file.path + '/' + file.filename) === (printerFile.path + '/' + printerFile.filename)
+      return `${file.path}/${file.filename}` === `${printerFile.path}/${printerFile.filename}`
     }
+
     return false
   }
 
@@ -414,19 +530,12 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
   }
 
   get flipTransform () {
-    const {
-      x,
-      y
-    } = this.viewBox
+    const { x, y } = this.viewBox
 
     const scale = [
       this.flipX ? -1 : 1,
       this.flipY ? -1 : 1
     ]
-
-    if (this.isDelta) {
-      return `scale(${scale.join()}) translate(0,0)`
-    }
 
     const transform = [
       this.flipX ? -(x.max + x.min) : 0,
@@ -436,64 +545,26 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
     return `scale(${scale.join()}) translate(${transform.join()})`
   }
 
-  get bedSize (): BBox {
-    const {
-      stepper_x: stepperX,
-      stepper_y: stepperY
-    } = this.$store.getters['printer/getPrinterSettings']()
+  get hasRoundBed (): boolean {
+    return this.$store.getters['printer/getHasRoundBed'] as boolean
+  }
 
-    if (this.isDelta) {
-      const radius = this.printerRadius
-      return {
-        x: {
-          min: -radius,
-          max: radius
-        },
-        y: {
-          min: -radius,
-          max: radius
-        }
-      }
-    }
+  get bedSize (): BedSize {
+    const bedSize = this.$store.getters['printer/getBedSize'] as BedSize | undefined
 
-    return {
-      x: {
-        min: stepperX?.position_min ?? 0,
-        max: stepperX?.position_max ?? 100
-      },
-      y: {
-        min: stepperY?.position_min ?? 0,
-        max: stepperY?.position_max ?? 100
-      }
+    return bedSize ?? {
+      minX: 0,
+      minY: 0,
+      maxX: 100,
+      maxY: 100
     }
   }
 
   get viewBox (): BBox {
-    const bounds = this.$store.getters['gcodePreview/getBounds']
+    const bounds = this.bounds
 
-    const {
-      stepper_x: stepperX,
-      stepper_y: stepperY
-    } = this.$store.getters['printer/getPrinterSettings']()
-
-    if (this.isDelta) {
-      const radius = this.printerRadius
-      return {
-        x: {
-          min: -radius,
-          max: radius * 2
-        },
-        y: {
-          min: -radius,
-          max: radius * 2
-        }
-      }
-    }
-
-    if (stepperX === undefined || stepperY === undefined || this.autoZoom) {
-      const padding = this.autoZoom
-        ? Math.min(bounds.x.max - bounds.x.min, bounds.y.max - bounds.y.min) * 0.05
-        : 0
+    if (this.autoZoom) {
+      const padding = Math.min(bounds.x.max - bounds.x.min, bounds.y.max - bounds.y.min) * 0.05
 
       return {
         x: {
@@ -507,27 +578,22 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
       }
     }
 
+    const bedSize = this.bedSize
+
     return {
       x: {
-        min: Math.min(stepperX.position_min, bounds.x.min),
-        max: Math.max(stepperX.position_max, bounds.x.max)
+        min: Math.min(bedSize.minX, bounds.x.min) - 2,
+        max: Math.max(bedSize.maxX, bounds.x.max) + 2
       },
       y: {
-        min: Math.min(stepperY.position_min, bounds.y.min),
-        max: Math.max(stepperY.position_max, bounds.y.max)
+        min: Math.min(bedSize.minY, bounds.y.min) - 2,
+        max: Math.max(bedSize.maxY, bounds.y.max) + 2
       }
     }
   }
 
   get svgViewBox () {
-    const {
-      x,
-      y
-    } = this.viewBox
-
-    if (this.isDelta) {
-      return `${x.min} ${y.min} ${x.max} ${y.max}`
-    }
+    const { x, y } = this.viewBox
 
     return `${x.min} ${y.min} ${x.max - x.min} ${y.max - y.min}`
   }
@@ -550,9 +616,9 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
       return this.defaultLayerPaths
     }
 
-    const layer = this.$store.getters['gcodePreview/getLayers'][this.layer]
+    const layer = this.$store.getters['gcodePreview/getLayers'][this.layer] as Layer | undefined
 
-    if (this.getViewerOption('followProgress')) {
+    if (this.followProgress) {
       const end = this.$store.getters['gcodePreview/getMoveIndexByFilePosition'](this.filePosition)
 
       return this.$store.getters['gcodePreview/getPaths'](layer?.move ?? 0, end)
@@ -578,7 +644,7 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
   }
 
   get svgPathNext (): LayerPaths {
-    const layers = this.$store.getters['gcodePreview/getLayers']
+    const layers = this.$store.getters['gcodePreview/getLayers'] as Layer[]
 
     if (this.disabled || this.layer >= layers.length) {
       return this.defaultLayerPaths
@@ -587,12 +653,16 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
     return this.$store.getters['gcodePreview/getLayerPaths'](this.layer + 1)
   }
 
-  get svgPathParts () {
-    return this.$store.getters['gcodePreview/getPartPaths']
+  get svgPathParts (): string[] {
+    return this.$store.getters['gcodePreview/getPartPaths'] as string[]
   }
 
   get file (): AppFile | undefined {
-    return this.$store.getters['gcodePreview/getFile']
+    return this.$store.getters['gcodePreview/getFile'] as AppFile | undefined
+  }
+
+  get bounds (): BBox {
+    return this.$store.getters['gcodePreview/getBounds'] as BBox
   }
 
   @Watch('focused')
@@ -610,8 +680,6 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
     this.panzoom = panzoom(this.svg, {
       maxZoom: 20,
       minZoom: 0.95,
-      bounds: true,
-      boundsPadding: 0.6,
       smoothScroll: this.showAnimations,
 
       beforeMouseDown: () => this.disabled,
@@ -643,14 +711,6 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
       this.container.focus()
     }
   }
-
-  getViewerOption (name: string) {
-    return this.$store.getters['gcodePreview/getViewerOption'](name)
-  }
-
-  getUiSetting (name: keyof GcodePreviewConfig) {
-    return this.$store.state.config.uiSettings.gcodePreview[name]
-  }
 }
 </script>
 
@@ -681,7 +741,9 @@ export default class GcodePreview extends Mixins(StateMixin, BrowserMixin) {
 
   :deep(.v-input__slot) {
     overflow: hidden;
-    max-height: calc(100vh * 2/3);
+    max-height: calc(100vh - 380px);
+    max-height: calc(100svh - 380px);
+    min-height: 250px !important;
     aspect-ratio: 1;
 
     svg {

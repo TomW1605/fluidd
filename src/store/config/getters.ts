@@ -1,9 +1,7 @@
 import type { GetterTree } from 'vuex'
-import vuetify from '@/plugins/vuetify'
-import type { ConfigState, SupportedTheme, TemperaturePreset, ThemeConfig } from './types'
+import type { ConfigState, TemperaturePreset } from './types'
 import type { RootState } from '../types'
 import type { Heater, Fan } from '../printer/types'
-import { TinyColor } from '@ctrl/tinycolor'
 import type { AppTableHeader } from '@/types'
 import type { AppTablePartialHeader } from '@/types/tableheaders'
 import type { MoonrakerRootFile } from '../files/types'
@@ -27,6 +25,10 @@ export const getters: GetterTree<ConfigState, RootState> = {
 
   getHostConfig: (state) => {
     return state.hostConfig
+  },
+
+  getAppReady: (state) => {
+    return state.appReady
   },
 
   /**
@@ -72,32 +74,6 @@ export const getters: GetterTree<ConfigState, RootState> = {
     })
   },
 
-  /**
-   * Returns our current theme data.
-   * Should augment vuetifies default.
-   */
-  getTheme: (state) => {
-    const v = vuetify.framework.theme
-    const o = state.uiSettings.theme
-
-    const r: ThemeConfig = {
-      ...state.uiSettings.theme,
-      currentTheme: {
-        ...v.currentTheme,
-        ...o.currentTheme
-      }
-    }
-
-    for (const key in r.currentTheme) {
-      // Currently used for the offset in the logo.
-      r.currentTheme[key + 'Offset'] = new TinyColor(o.currentTheme.primary as string)
-        .desaturate(5)
-        .darken(10)
-        .toHexString()
-    }
-    return r
-  },
-
   getCustomThemeFile: (state, getters, rootState, rootGetters) => (filename: string, extensions: string[]) => {
     const files = rootGetters['files/getRootFiles']('config') as MoonrakerRootFile[] | undefined
 
@@ -112,50 +88,29 @@ export const getters: GetterTree<ConfigState, RootState> = {
     }
   },
 
-  /**
-   * Returns a default theme preset for first init / when reset
-   */
-  getDefaultThemePreset: (state) => {
-    if (state.hostConfig.themePresets.length > 0) {
-      return state.hostConfig.themePresets[0] // First entry represents default
-    }
-    return {
-      name: 'Fluidd',
-      logo: {
-        src: 'logo_fluidd.svg',
-        changeWithTheme: true
-      },
-      color: '#2196F3'
-    }
-  },
-
-  getCurrentThemePreset: (state, getters) => {
-    const presets = state.hostConfig.themePresets
-    const theme = getters.getTheme
-    return presets.find((preset: SupportedTheme) => preset.logo.src === theme.logo.src)
-  },
-
   getMergedTableHeaders: (state, getters) => (headers: AppTableHeader[], key: string) => {
     const configured: AppTablePartialHeader[] = getters.getConfiguredTableHeaders(key)
+
     if (!configured) {
       return headers
     }
-    const merged: AppTableHeader[] = []
-    headers.forEach(header => {
-      const keyBy = (header.key)
-        ? 'key'
-        : 'value'
 
-      const o = {
-        visible: true,
-        configurable: false,
-        ...header,
-        ...configured.find(p => p[keyBy] === header[keyBy])
-      }
-
-      merged.push(o)
-    })
-    return merged
+    // if the number of configured headers is the same as the available headers,
+    // then use configured headers to keep order
+    // else go with available headers
+    return headers.length === configured.length
+      ? configured
+        .map(header => ({
+          visible: true,
+          ...headers.find(p => p.value === header.value),
+          ...header,
+        }))
+      : headers
+        .map(header => ({
+          visible: true,
+          ...header,
+          ...configured.find(p => p.value === header.value)
+        }))
   },
 
   getConfiguredTableHeaders: (state) => (key: string) => {

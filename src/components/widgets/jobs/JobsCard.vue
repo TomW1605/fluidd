@@ -4,6 +4,7 @@
     icon="$files"
     draggable
     layout-path="dashboard.jobs-card"
+    :help-tooltip="$t('app.general.tooltip.file_browser_help')"
   >
     <template #menu>
       <app-btn
@@ -11,7 +12,7 @@
         fab
         x-small
         text
-        @click="$filters.routeTo($router, '/jobs')"
+        @click="$filters.routeTo({ name: 'jobs' })"
       >
         <v-icon>$fullScreen</v-icon>
       </app-btn>

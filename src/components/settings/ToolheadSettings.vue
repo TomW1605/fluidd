@@ -34,7 +34,7 @@
 
       <v-divider />
 
-      <template v-if="toolheadControlStyle === 'cross'">
+      <template v-if="toolheadControlStyle === 'cross' || toolheadControlStyle === 'circle'">
         <app-setting :title="$t('app.setting.label.invert_x_control')">
           <v-switch
             v-model="invertX"
@@ -64,7 +64,9 @@
         </app-setting>
 
         <v-divider />
+      </template>
 
+      <template v-if="toolheadControlStyle === 'cross'">
         <app-setting :title="$t('app.setting.label.toolhead_move_distances')">
           <v-combobox
             ref="toolheadMoveDistances"
@@ -150,6 +152,64 @@
               $rules.lengthLessThanOrEqual(3),
               $rules.numberArrayValid
             ]"
+          />
+        </app-setting>
+
+        <v-divider />
+      </template>
+
+      <template v-else-if="toolheadControlStyle === 'circle'">
+        <app-setting :title="$t('app.setting.label.toolhead_xy_move_distances')">
+          <v-combobox
+            ref="toolheadCircleXYMoveDistances"
+            v-model="toolheadCircleXYMoveDistances"
+            filled
+            dense
+            hide-selected
+            hide-details="auto"
+            suffix="mm"
+            multiple
+            small-chips
+            append-icon=""
+            deletable-chips
+            :rules="[
+              $rules.lengthGreaterThanOrEqual(4),
+              $rules.lengthLessThanOrEqual(4),
+              $rules.numberArrayValid
+            ]"
+          />
+        </app-setting>
+
+        <v-divider />
+
+        <app-setting :title="$t('app.setting.label.toolhead_z_move_distances')">
+          <v-combobox
+            ref="toolheadCircleZMoveDistances"
+            v-model="toolheadCircleZMoveDistances"
+            filled
+            dense
+            hide-selected
+            hide-details="auto"
+            suffix="mm"
+            multiple
+            small-chips
+            append-icon=""
+            deletable-chips
+            :rules="[
+              $rules.lengthGreaterThanOrEqual(4),
+              $rules.lengthLessThanOrEqual(4),
+              $rules.numberArrayValid
+            ]"
+          />
+        </app-setting>
+
+        <v-divider />
+
+        <app-setting :title="$t('app.setting.label.enable_xy_homing')">
+          <v-switch
+            v-model="toolheadCircleXYHomingEnabled"
+            hide-details
+            class="mt-0 mb-4"
           />
         </app-setting>
 
@@ -281,6 +341,19 @@
 
       <v-divider />
 
+      <app-setting
+        :title="$t('app.setting.label.show_screws_tilt_adjust_dialog_automatically')"
+        :sub-title="$t('app.setting.tooltip.show_screws_tilt_adjust_dialog_automatically')"
+      >
+        <v-switch
+          v-model="showScrewsTiltAdjustDialogAutomatically"
+          hide-details
+          class="mt-0 mb-4"
+        />
+      </app-setting>
+
+      <v-divider />
+
       <template v-if="printerSupportsForceMove">
         <app-setting :title="$t('app.setting.label.force_move_toggle_warning')">
           <v-switch
@@ -327,10 +400,16 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
   @Ref('toolheadZMoveDistances')
   readonly toolheadZMoveDistancesElement!: VInput
 
+  @Ref('toolheadCircleXYMoveDistances')
+  readonly toolheadCircleXYMoveDistancesElement!: VInput
+
+  @Ref('toolheadCircleZMoveDistances')
+  readonly toolheadCircleZMoveDistancesElement!: VInput
+
   @Ref('zAdjustValues')
   readonly zAdjustValuesElement!: VInput
 
-  get defaultExtrudeSpeed () {
+  get defaultExtrudeSpeed (): number {
     return this.$store.state.config.uiSettings.general.defaultExtrudeSpeed
   }
 
@@ -342,7 +421,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get defaultExtrudeLength () {
+  get defaultExtrudeLength (): number {
     return this.$store.state.config.uiSettings.general.defaultExtrudeLength
   }
 
@@ -354,7 +433,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get defaultToolheadMoveLength () {
+  get defaultToolheadMoveLength (): number {
     return this.$store.state.config.uiSettings.general.defaultToolheadMoveLength
   }
 
@@ -366,7 +445,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get defaultToolheadXYSpeed () {
+  get defaultToolheadXYSpeed (): number {
     return this.$store.state.config.uiSettings.general.defaultToolheadXYSpeed
   }
 
@@ -378,7 +457,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get defaultToolheadZSpeed () {
+  get defaultToolheadZSpeed (): number {
     return this.$store.state.config.uiSettings.general.defaultToolheadZSpeed
   }
 
@@ -390,7 +469,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get zAdjustValues () {
+  get zAdjustValues (): number[] {
     return this.$store.state.config.uiSettings.general.zAdjustDistances
   }
 
@@ -406,7 +485,19 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get toolheadControlStyle () {
+  get toolheadCircleXYHomingEnabled (): boolean {
+    return this.$store.state.config.uiSettings.general.toolheadCircleXYHomingEnabled
+  }
+
+  set toolheadCircleXYHomingEnabled (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.toolheadCircleXYHomingEnabled',
+      value,
+      server: true
+    })
+  }
+
+  get toolheadControlStyle (): ToolheadControlStyle {
     return this.$store.state.config.uiSettings.general.toolheadControlStyle
   }
 
@@ -427,11 +518,15 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
       {
         value: 'bars',
         text: this.$t('app.general.label.bars')
+      },
+      {
+        value: 'circle',
+        text: this.$t('app.general.label.circle')
       }
     ]
   }
 
-  get toolheadMoveDistances () {
+  get toolheadMoveDistances (): number[] {
     return this.$store.state.config.uiSettings.general.toolheadMoveDistances
   }
 
@@ -440,14 +535,21 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
       return
     }
 
+    const toolheadMoveDistances = [...new Set(value.map(Number))]
+      .sort((a, b) => a - b)
+
     this.$store.dispatch('config/saveByPath', {
       path: 'uiSettings.general.toolheadMoveDistances',
-      value: [...new Set(value.map(Number))].sort((a, b) => a - b),
+      value: toolheadMoveDistances,
       server: true
     })
+
+    if (toolheadMoveDistances.includes(this.defaultToolheadMoveLength) === false) {
+      this.setDefaultToolheadMoveLength(toolheadMoveDistances[0])
+    }
   }
 
-  get toolheadXYMoveDistances () {
+  get toolheadXYMoveDistances (): number[] {
     return this.$store.state.config.uiSettings.general.toolheadXYMoveDistances
   }
 
@@ -463,7 +565,23 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get toolheadZMoveDistances () {
+  get toolheadCircleXYMoveDistances (): number[] {
+    return this.$store.state.config.uiSettings.general.toolheadCircleXYMoveDistances
+  }
+
+  set toolheadCircleXYMoveDistances (value: (number | string)[]) {
+    if (!this.toolheadCircleXYMoveDistancesElement.validate(true)) {
+      return
+    }
+
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.toolheadCircleXYMoveDistances',
+      value: [...new Set(value.map(Number))].sort((a, b) => a - b),
+      server: true
+    })
+  }
+
+  get toolheadZMoveDistances (): number[] {
     return this.$store.state.config.uiSettings.general.toolheadZMoveDistances
   }
 
@@ -479,7 +597,23 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get useGcodeCoords () {
+  get toolheadCircleZMoveDistances (): number[] {
+    return this.$store.state.config.uiSettings.general.toolheadCircleZMoveDistances
+  }
+
+  set toolheadCircleZMoveDistances (value: (number | string)[]) {
+    if (!this.toolheadCircleZMoveDistancesElement.validate(true)) {
+      return
+    }
+
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.toolheadCircleZMoveDistances',
+      value: [...new Set(value.map(Number))].sort((a, b) => a - b),
+      server: true
+    })
+  }
+
+  get useGcodeCoords (): boolean {
     return this.$store.state.config.uiSettings.general.useGcodeCoords
   }
 
@@ -491,7 +625,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get invertX () {
+  get invertX (): boolean {
     return this.$store.state.config.uiSettings.general.axis.x.inverted
   }
 
@@ -503,7 +637,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get invertY () {
+  get invertY (): boolean {
     return this.$store.state.config.uiSettings.general.axis.y.inverted
   }
 
@@ -515,7 +649,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get invertZ () {
+  get invertZ (): boolean {
     return this.$store.state.config.uiSettings.general.axis.z.inverted
   }
 
@@ -527,15 +661,11 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get printerSupportsForceMove () {
+  get printerSupportsForceMove (): boolean {
     return this.$store.getters['printer/getPrinterSettings']('force_move.enable_force_move') ?? false
   }
 
-  get printerSupportsSpoolman () {
-    return this.$store.getters['spoolman/getSupported']
-  }
-
-  get showManualProbeDialogAutomatically () {
+  get showManualProbeDialogAutomatically (): boolean {
     return this.$store.state.config.uiSettings.general.showManualProbeDialogAutomatically
   }
 
@@ -547,7 +677,7 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get showBedScrewsAdjustDialogAutomatically () {
+  get showBedScrewsAdjustDialogAutomatically (): boolean {
     return this.$store.state.config.uiSettings.general.showBedScrewsAdjustDialogAutomatically
   }
 
@@ -559,7 +689,19 @@ export default class ToolHeadSettings extends Mixins(ToolheadMixin) {
     })
   }
 
-  get forceMoveToggleWarning () {
+  get showScrewsTiltAdjustDialogAutomatically (): boolean {
+    return this.$store.state.config.uiSettings.general.showScrewsTiltAdjustDialogAutomatically
+  }
+
+  set showScrewsTiltAdjustDialogAutomatically (value: boolean) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.general.showScrewsTiltAdjustDialogAutomatically',
+      value,
+      server: true
+    })
+  }
+
+  get forceMoveToggleWarning (): boolean {
     return this.$store.state.config.uiSettings.general.forceMoveToggleWarning
   }
 

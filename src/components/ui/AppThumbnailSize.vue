@@ -47,9 +47,9 @@ import { Component, Prop, VModel, Vue } from 'vue-property-decorator'
 @Component({})
 export default class FileSystemToolbar extends Vue {
   @VModel({ type: Number, required: true })
-    thumbnailSize!: number
+  thumbnailSize!: number
 
-  @Prop({ type: Boolean, default: false })
-  readonly disabled!: boolean
+  @Prop({ type: Boolean })
+  readonly disabled?: boolean
 }
 </script>

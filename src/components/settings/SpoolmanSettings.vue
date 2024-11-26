@@ -77,6 +77,23 @@
       </app-setting>
 
       <v-divider />
+      <app-setting
+        :title="$tc('app.spoolman.setting.remaining_filament_unit')"
+      >
+        <v-select
+          v-model="remainingFilamentUnit"
+          filled
+          dense
+          single-line
+          hide-details="auto"
+          :items="[
+            {text: $tc('app.spoolman.label.weight'), value: 'weight'},
+            {text: $tc('app.spoolman.label.length'), value: 'length'}
+          ]"
+        />
+      </app-setting>
+
+      <v-divider />
       <app-setting :title="$t('app.setting.label.reset')">
         <app-btn
           outlined
@@ -95,7 +112,7 @@
 import { Component, Mixins } from 'vue-property-decorator'
 import { defaultState } from '@/store/config/state'
 import StateMixin from '@/mixins/state'
-import type { CameraConfig } from '@/store/cameras/types'
+import type { WebcamConfig } from '@/store/webcams/types'
 
 @Component({
   components: {}
@@ -113,15 +130,26 @@ export default class SpoolmanSettings extends Mixins(StateMixin) {
     })
   }
 
-  get supportedCameras () {
+  get enabledWebcams (): WebcamConfig[] {
+    return this.$store.getters['webcams/getEnabledWebcams'] as WebcamConfig[]
+  }
+
+  get supportedCameras (): Array<{ text?: string, value: string | null, disabled?: boolean }> {
     return [
-      { text: this.$tc('app.setting.label.none', 0), value: null },
-      ...this.$store.getters['cameras/getEnabledCameras']
-        .map((camera: CameraConfig) => ({ text: camera.name, value: camera.id, disabled: !camera.enabled || camera.service === 'iframe' }))
+      {
+        text: this.$tc('app.setting.label.none'),
+        value: null
+      },
+      ...this.enabledWebcams
+        .map(camera => ({
+          text: camera.name,
+          value: camera.uid,
+          disabled: camera.service === 'iframe'
+        }))
     ]
   }
 
-  get autoOpenQRDetectionCameraId (): string {
+  get autoOpenQRDetectionCameraId (): string | null {
     return this.$store.state.config.uiSettings.spoolman.autoOpenQRDetectionCamera
   }
 
@@ -133,7 +161,7 @@ export default class SpoolmanSettings extends Mixins(StateMixin) {
     })
   }
 
-  get preferDeviceCamera () {
+  get preferDeviceCamera (): boolean {
     return this.$store.state.config.uiSettings.spoolman.preferDeviceCamera
   }
 
@@ -145,7 +173,7 @@ export default class SpoolmanSettings extends Mixins(StateMixin) {
     })
   }
 
-  get autoSelectSpoolOnMatch () {
+  get autoSelectSpoolOnMatch (): boolean {
     return this.$store.state.config.uiSettings.spoolman.autoSelectSpoolOnMatch
   }
 
@@ -157,7 +185,7 @@ export default class SpoolmanSettings extends Mixins(StateMixin) {
     })
   }
 
-  get warnOnNotEnoughFilament () {
+  get warnOnNotEnoughFilament (): boolean {
     return this.$store.state.config.uiSettings.spoolman.warnOnNotEnoughFilament
   }
 
@@ -169,13 +197,25 @@ export default class SpoolmanSettings extends Mixins(StateMixin) {
     })
   }
 
-  get warnOnFilamentTypeMismatch () {
+  get warnOnFilamentTypeMismatch (): boolean {
     return this.$store.state.config.uiSettings.spoolman.warnOnFilamentTypeMismatch
   }
 
   set warnOnFilamentTypeMismatch (value: boolean) {
     this.$store.dispatch('config/saveByPath', {
       path: 'uiSettings.spoolman.warnOnFilamentTypeMismatch',
+      value,
+      server: true
+    })
+  }
+
+  get remainingFilamentUnit (): string {
+    return this.$store.state.config.uiSettings.spoolman.remainingFilamentUnit
+  }
+
+  set remainingFilamentUnit (value: string) {
+    this.$store.dispatch('config/saveByPath', {
+      path: 'uiSettings.spoolman.remainingFilamentUnit',
       value,
       server: true
     })

@@ -11,6 +11,7 @@
           <v-text-field
             :label="$t('app.general.label.screw_name')"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -23,6 +24,7 @@
           <v-text-field
             :label="$t('app.general.label.screw_index')"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -35,6 +37,7 @@
           <v-text-field
             :label="$t('app.general.label.accepted_screws')"
             outlined
+            persistent-placeholder
             hide-details
             dense
             disabled
@@ -91,15 +94,15 @@
 import { Component, Mixins, VModel, Watch } from 'vue-property-decorator'
 import StateMixin from '@/mixins/state'
 import ToolheadMixin from '@/mixins/toolhead'
-import { startCase } from 'lodash-es'
+import type { BedScrews } from '@/store/printer/types'
 
 @Component({})
 export default class BedScrewsAdjustDialog extends Mixins(StateMixin, ToolheadMixin) {
-  @VModel({ type: Boolean, default: false })
-    open!: boolean
+  @VModel({ type: Boolean })
+  open?: boolean
 
-  get bedScrews () {
-    return this.$store.getters['printer/getBedScrews']
+  get bedScrews (): BedScrews[] {
+    return this.$store.getters['printer/getBedScrews'] as BedScrews[]
   }
 
   get bedScrewsAdjust () {
@@ -107,7 +110,7 @@ export default class BedScrewsAdjustDialog extends Mixins(StateMixin, ToolheadMi
   }
 
   get currentState () {
-    return this.bedScrewsAdjust.state || ' '
+    return this.bedScrewsAdjust.state
   }
 
   get currentScrewIndex () {
@@ -115,13 +118,7 @@ export default class BedScrewsAdjustDialog extends Mixins(StateMixin, ToolheadMi
   }
 
   get currentScrewName () {
-    return startCase(this.bedScrews[this.currentScrewIndex].name || this.$t('app.general.label.screw_number', { index: this.currentScrewIndex + 1 }))
-  }
-
-  get currentScrewPosition () {
-    const [x, y] = this.bedScrews[this.currentScrewIndex][this.currentState]
-
-    return `${x}, ${y}`
+    return this.bedScrews[this.currentScrewIndex].prettyName
   }
 
   get acceptedScrews () {

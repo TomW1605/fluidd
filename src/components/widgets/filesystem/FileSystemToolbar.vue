@@ -126,24 +126,23 @@
       class="ml-1"
     >
       <v-text-field
-        v-model="textSearch"
+        v-model="searchModel"
         :disabled="disabled"
         outlined
         dense
         single-line
         hide-details
         append-icon="$magnify"
-        @keyup="$emit('update:search', textSearch);"
       />
     </div>
 
     <template
-      v-if="roots.length > 1"
+      v-if="roots && roots.length > 1"
       #extension
     >
-      <v-tabs>
+      <v-tabs show-arrows>
         <v-tab
-          v-for="(root, index) in registeredRoots"
+          v-for="(root, index) in roots"
           :key="index"
           @change="$emit('root-change', root)"
         >
@@ -155,7 +154,7 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Mixins } from 'vue-property-decorator'
+import { Component, Prop, Mixins, PropSync } from 'vue-property-decorator'
 import StatesMixin from '@/mixins/state'
 import FileSystemAddMenu from './FileSystemAddMenu.vue'
 import FileSystemFilterMenu from './FileSystemFilterMenu.vue'
@@ -173,33 +172,31 @@ export default class FileSystemToolbar extends Mixins(StatesMixin) {
   @Prop({ type: String, required: true })
   readonly root!: string
 
-  @Prop({ type: String, required: false })
+  @Prop({ type: String, required: true })
   readonly name!: string
 
   // Can be a list of roots, or a single root.
-  @Prop({ type: Array, required: false })
-  readonly roots!: string[]
+  @Prop({ type: Array<string> })
+  readonly roots?: string[]
 
   // Currently defined list of headers.
-  @Prop({ type: Array, required: false })
-  readonly headers!: AppTableHeader[]
+  @Prop({ type: Array<AppTableHeader> })
+  readonly headers?: AppTableHeader[]
 
   // The current path
-  @Prop({ type: String, required: false })
+  @Prop({ type: String })
   readonly path!: string
 
   // If the controls are disabled or not.
-  @Prop({ type: Boolean, default: false })
-  readonly disabled!: boolean
+  @Prop({ type: Boolean })
+  readonly disabled?: boolean
 
   // If the fs is loading or not.
-  @Prop({ type: Boolean, default: false })
-  readonly loading!: boolean
+  @Prop({ type: Boolean })
+  readonly loading?: boolean
 
-  @Prop({ type: String, default: '' })
-  readonly search!: string
-
-  textSearch = ''
+  @PropSync('search', { type: String, default: '' })
+  searchModel!: string
 
   get readonly () {
     return this.rootProperties.readonly
@@ -223,12 +220,7 @@ export default class FileSystemToolbar extends Mixins(StatesMixin) {
     return this.$store.getters['files/getRootProperties'](this.root) as RootProperties
   }
 
-  // Only show roots that have been registered.
-  get registeredRoots () {
-    return this.roots.filter(r => this.$store.state.server.info.registered_directories.includes(r))
-  }
-
-  get thumbnailSize () {
+  get thumbnailSize (): number {
     return this.$store.state.config.uiSettings.general.thumbnailSize
   }
 
@@ -238,10 +230,6 @@ export default class FileSystemToolbar extends Mixins(StatesMixin) {
       value,
       server: true
     })
-  }
-
-  mounted () {
-    this.textSearch = this.search
   }
 
   handleUpload (files: FileList | File[], print: boolean) {

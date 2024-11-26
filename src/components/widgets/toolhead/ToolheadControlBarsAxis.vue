@@ -8,13 +8,15 @@
         :values="values"
         color="primary"
         :disabled="!klippyReady || printerPrinting || !homed"
-        @click="sendMoveGcode($event)"
+        class="d-flex"
+        @click="moveBy($event)"
       >
         <app-btn
           :color="!homed ? 'primary' : undefined"
+          :disabled="!klippyReady || printerPrinting"
           :loading="hasWait(wait)"
           class="flex-grow-1"
-          @click="sendHomeGcode"
+          @click="home"
         >
           <v-icon
             small-icon
@@ -75,13 +77,15 @@ export default class ToolheadControlBarsAxis extends Mixins(StateMixin, Toolhead
       : this.$store.state.config.uiSettings.general.defaultToolheadXYSpeed
   }
 
-  sendMoveGcode (distance: number) {
-    this.sendGcode(`G91
-    G1 ${this.axis}${distance} F${this.rate * 60}
-    G90`)
+  moveBy (distance: number) {
+    this.sendMoveGcode(
+      {
+        [this.axis]: distance
+      },
+      this.rate)
   }
 
-  sendHomeGcode () {
+  home () {
     this.sendGcode(`G28 ${this.axis}`, this.wait)
   }
 }

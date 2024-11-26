@@ -33,14 +33,14 @@ import StateMixin from '@/mixins/state'
 
 @Component({})
 export default class AppToolsDrawer extends Mixins(StateMixin) {
-  @VModel({ type: Boolean, default: false })
-    open!: boolean
+  @VModel({ type: Boolean })
+  open?: boolean
 
   get supportsHistory () {
     return this.$store.getters['server/componentSupport']('history')
   }
 
-  get instanceName () {
+  get instanceName (): string {
     return this.$store.state.config.uiSettings.general.instanceName
   }
 
@@ -48,7 +48,7 @@ export default class AppToolsDrawer extends Mixins(StateMixin) {
     return this.$store.getters['server/getInfo']
   }
 
-  get hasUpdates () {
+  get hasUpdates (): boolean {
     return this.$store.getters['version/hasUpdates']
   }
 }

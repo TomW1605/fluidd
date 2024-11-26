@@ -1,9 +1,9 @@
 import type { AppTablePartialHeader } from '@/types/tableheaders'
-import type { VuetifyThemeItem } from 'vuetify/types/services/theme'
 import type { FileFilterType } from '../files/types'
 
 export interface ConfigState {
   [key: string]: any;
+  appReady: boolean;
   apiUrl: string;
   socketUrl: string;
   layoutMode: boolean;
@@ -38,13 +38,18 @@ export interface SpoolmanConfig {
   preferDeviceCamera: boolean;
   warnOnNotEnoughFilament: boolean;
   warnOnFilamentTypeMismatch: boolean;
+  selectionDialogSortOrder: {
+    key: string | null;
+    desc: boolean | null;
+  },
+  remainingFilamentUnit: 'weight' | 'length'
 }
 
 export interface HostConfig {
   endpoints: string[];
   blacklist: string[];
   hosted: boolean;
-  themePresets: SupportedTheme[];
+  themePresets: ThemePreset[];
 }
 
 export interface SupportedLocale {
@@ -67,16 +72,21 @@ export interface GeneralConfig {
   toolheadMoveDistances: number[];
   toolheadXYMoveDistances: number[];
   toolheadZMoveDistances: number[];
+  toolheadCircleXYMoveDistances: number[];
+  toolheadCircleZMoveDistances: number[];
+  toolheadCircleXYHomingEnabled: boolean;
   useGcodeCoords: boolean;
   zAdjustDistances: number[];
   enableVersionNotifications: boolean;
   confirmOnEstop: boolean;
   confirmOnPowerDeviceChange: boolean;
   confirmOnSaveConfigAndRestart: boolean;
-  ignoreDefaultBedMeshPendingConfigurationChanges: boolean;
+  sectionsToIgnorePendingConfigurationChanges: string[];
   dateFormat: string;
   timeFormat: string;
+  enableKeyboardShortcuts: boolean;
   textSortOrder: TextSortOrder;
+  filesAndFoldersDragAndDrop: boolean;
   showRateOfChange: boolean;
   showRelativeHumidity: boolean;
   showBarometricPressure: boolean;
@@ -88,36 +98,49 @@ export interface GeneralConfig {
   topNavPowerToggle: null | string;
   showManualProbeDialogAutomatically: boolean;
   showBedScrewsAdjustDialogAutomatically: boolean;
+  showScrewsTiltAdjustDialogAutomatically: boolean;
   forceMoveToggleWarning: boolean;
+  printInProgressLayout: PrintInProgressLayout;
+  printProgressCalculation: PrintProgressCalculation[];
+  printEtaCalculation: PrintEtaCalculation[];
   enableDiagnostics: boolean;
   thumbnailSize: number;
+  colorPickerValueRange: ColorPickerValueRange;
   showHidden: boolean;
 }
 
-export type ToolheadControlStyle = 'cross' | 'bars'
+export type ToolheadControlStyle = 'cross' | 'bars' | 'circle'
 
 export type TextSortOrder = 'default' | 'numeric-prefix' | 'version'
 
-export type CameraFullscreenAction = 'embed' | 'rawstream';
+export type CameraFullscreenAction = 'embed' | 'rawstream'
+
+export type PrintInProgressLayout = 'default' | 'compact'
+
+export type ColorPickerValueRange = 'absolute' | 'percentage'
+
+export type PrintProgressCalculation = 'file' | 'fileAbsolute' | 'slicer' | 'filament'
+
+export type PrintEtaCalculation = 'file' | 'slicer'
 
 // Config stored in moonraker db
 export interface ThemeConfig {
-  currentTheme: {[index: string]: string | Partial<VuetifyThemeItem> | undefined }; // the color list.
-  isDark: boolean; // inidicates if the theme as a whole is dark or not.
-  logo: SupportedThemeLogo; // Current logo to use.
+  color: string;
+  isDark: boolean;
+  logo: ThemeLogo;
+  backgroundLogo: boolean;
 }
 
 // Config defined in host
-export interface SupportedTheme {
+export interface ThemePreset {
   name: string;
-  logo: SupportedThemeLogo;
   color: string;
   isDark: boolean;
+  logo: ThemeLogo;
 }
 
-export interface SupportedThemeLogo {
+export interface ThemeLogo {
   src: string;
-  dynamic: boolean;
   dark?: string;
   light?: string;
 }
@@ -192,19 +215,31 @@ export interface GcodePreviewConfig {
   extrusionLineWidth: number;
   moveLineWidth: number;
   retractionIconSize: number;
+  drawOrigin: boolean;
   drawBackground: boolean;
   showAnimations: boolean;
   minLayerHeight: number;
   autoLoadOnPrintStart: boolean;
   autoLoadMobileOnPrintStart: boolean;
   autoFollowOnFileLoad: boolean;
+  hideSinglePartBoundingBox: boolean;
   autoZoom: boolean;
   flip: {
     horizontal: boolean;
     vertical: boolean;
   };
+  showCurrentLayer: boolean;
+  showNextLayer: boolean;
+  showPreviousLayer: boolean;
+  showMoves: boolean;
+  showExtrusions: boolean;
+  showRetractions: boolean;
+  showParts: boolean;
+  followProgress: boolean;
 }
 
 export interface FileSystemConfig {
-  activeFilters: Record<string, FileFilterType[]>
+  activeFilters: Record<string, FileFilterType[]>;
+  sortBy: Record<string, string | null>;
+  sortDesc: Record<string, boolean | null>;
 }
