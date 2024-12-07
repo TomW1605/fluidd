@@ -10,7 +10,7 @@
           v-if="isManualProbeActive"
           :disabled="!klippyReady || printerPrinting"
           small
-          class="ms-1 my-1"
+          class="me-1 my-1"
           @click="manualProbeDialogOpen = true"
         >
           {{ $t('app.tool.tooltip.manual_probe') }}
@@ -62,14 +62,13 @@
                 <template #activator="{ on, attrs }">
                   <app-btn
                     v-bind="attrs"
-                    x-small
-                    color=""
-                    fab
-                    text
+                    icon
                     @click="loadProfile(item.name)"
                     v-on="on"
                   >
-                    <v-icon>$open</v-icon>
+                    <v-icon dense>
+                      $open
+                    </v-icon>
                   </app-btn>
                 </template>
                 <span>{{ $t('app.bedmesh.tooltip.load') }}</span>
@@ -79,16 +78,12 @@
                 <template #activator="{ on, attrs }">
                   <app-btn
                     v-bind="attrs"
-                    color=""
-                    class="ml-2"
-                    fab
-                    text
-                    x-small
+                    icon
                     :disabled="item.adaptive"
                     @click="removeProfile(item.name)"
                     v-on="on"
                   >
-                    <v-icon color="">
+                    <v-icon dense>
                       $delete
                     </v-icon>
                   </app-btn>
@@ -269,16 +264,11 @@
       :adaptive="saveDialogState.adaptive"
       @save="handleMeshSave"
     />
-
-    <manual-probe-dialog
-      v-if="manualProbeDialogOpen"
-      v-model="manualProbeDialogOpen"
-    />
   </collapsable-card>
 </template>
 
 <script lang="ts">
-import { Component, Mixins, Watch } from 'vue-property-decorator'
+import { Component, Mixins } from 'vue-property-decorator'
 import SaveMeshDialog from './SaveMeshDialog.vue'
 import StateMixin from '@/mixins/state'
 import ToolheadMixin from '@/mixins/toolhead'
@@ -295,8 +285,6 @@ import type {
   }
 })
 export default class BedMesh extends Mixins(StateMixin, ToolheadMixin) {
-  manualProbeDialogOpen = false
-
   mapScaleLabels = ['min', '0.1', '0.2']
   boxScaleLabels = ['1.0', '1.5', '2.0']
 
@@ -421,18 +409,6 @@ export default class BedMesh extends Mixins(StateMixin, ToolheadMixin) {
       open: true,
       existingName: this.currentMesh.profile_name,
       adaptive: profile?.adaptive ?? false
-    }
-  }
-
-  get showManualProbeDialogAutomatically (): boolean {
-    return this.$store.state.config.uiSettings.general.showManualProbeDialogAutomatically
-  }
-
-  @Watch('isManualProbeActive')
-  onIsManualProbeActive (value: boolean) {
-    if (value && this.showManualProbeDialogAutomatically &&
-      this.klippyReady && !this.printerPrinting) {
-      this.manualProbeDialogOpen = true
     }
   }
 }

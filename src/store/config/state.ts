@@ -127,7 +127,6 @@ export const defaultState = (): ConfigState => {
         sortDesc: {}
       },
       toolhead: {
-        forceMove: false,
         extrudeSpeed: -1,
         extrudeLength: -1
       },

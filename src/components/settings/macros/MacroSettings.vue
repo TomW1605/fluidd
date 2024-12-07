@@ -56,27 +56,19 @@
             </template>
 
             <app-btn
-              fab
-              text
-              x-small
-              color=""
-              class="ms-1"
+              icon
               @click.stop="handleEditCategoryDialog(category)"
             >
-              <v-icon color="">
+              <v-icon dense>
                 $edit
               </v-icon>
             </app-btn>
 
             <app-btn
-              fab
-              text
-              x-small
-              color=""
-              class="ms-1"
+              icon
               @click.stop="handleRemoveCategory(category)"
             >
-              <v-icon color="">
+              <v-icon dense>
                 $delete
               </v-icon>
             </app-btn>
@@ -102,7 +94,12 @@
               {{ uncategorizedMacros.visible }} / {{ uncategorizedMacros.count }}
             </v-chip>
           </template>
-          <v-icon>$chevronRight</v-icon>
+          <v-icon
+            dense
+            class="pa-1"
+          >
+            $chevronRight
+          </v-icon>
         </app-setting>
       </template>
 
@@ -211,7 +208,7 @@ export default class MacroSettings extends Mixins(StateMixin) {
   handleCategoryClick (category?: MacroCategory) {
     const categoryId = category?.id ?? '0'
     this.$router.push({
-      name: 'settings_macro_category',
+      name: 'macro_category_settings',
       params: {
         categoryId
       }
