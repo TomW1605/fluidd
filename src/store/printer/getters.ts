@@ -2,7 +2,7 @@ import Vue from 'vue'
 import type { GetterTree } from 'vuex'
 import type { RootState } from '../types'
 import type { PrinterState, Heater, Fan, Led, OutputPin, Sensor, RunoutSensor, KnownExtruder, MCU, Endstop, Probe, ExtruderStepper, Extruder, ExtruderConfig, ProbeName, Stepper, ScrewsTiltAdjustScrew, ScrewsTiltAdjust, BedScrews, BedSize, GcodeCommands, TimeEstimates, BeaconState, KlippyApp } from './types'
-import { get } from 'lodash-es'
+import { capitalize, get } from 'lodash-es'
 import getKlipperType from '@/util/get-klipper-type'
 import i18n from '@/plugins/i18n'
 import type { GcodeHelp } from '../console/types'
@@ -35,7 +35,7 @@ export const getters: GetterTree<PrinterState, RootState> = {
   getKlippyState: (state, getters, rootState, rootGetters): string => {
     const serverInfo = rootGetters['server/getInfo'] as ServerInfo
 
-    return Vue.$filters.capitalize(serverInfo.klippy_state || '')
+    return capitalize(serverInfo.klippy_state || '')
   },
 
   getKlippyStateMessage: (state, getters, rootState, rootGetters): string => {
@@ -286,17 +286,17 @@ export const getters: GetterTree<PrinterState, RootState> = {
   /**
    * Return MCU's and their state
    */
-  getMcus: (state) => {
-    const mcus: MCU[] = []
-    Object.keys(state.printer)
+  getMcus: (state, getters) => {
+    const mcus = Object.keys(state.printer)
       .filter(key => key.startsWith('mcu'))
       .sort()
-      .forEach(key => {
-        mcus.push({
-          name: key,
-          ...state.printer[key]
-        })
-      })
+      .map((key): MCU => ({
+        name: key,
+        prettyName: Vue.$filters.prettyCase(key),
+        ...state.printer[key],
+        config: getters.getPrinterSettings(key)
+      }))
+
     return mcus
   },
 
