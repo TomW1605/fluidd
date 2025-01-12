@@ -265,6 +265,8 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
       case 'klipper': {
         const device = this.$store.getters['printer/getPinByName'](name) as OutputPin | undefined
 
+        if (!device) return null
+
         return {
           type,
           name: device?.prettyName ?? name,
@@ -273,11 +275,13 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
       }
 
       default: {
-        const device = this.$store.getters['power/getDeviceByName'](topNavPowerToggle) as Device
+        const device = this.$store.getters['power/getDeviceByName'](topNavPowerToggle) as Device | undefined
+
+        if (!device) return null
 
         return {
           type: 'moonraker' as const,
-          name: topNavPowerToggle,
+          name: this.$filters.prettyCase(topNavPowerToggle),
           device
         }
       }
@@ -385,7 +389,7 @@ export default class AppBar extends Mixins(StateMixin, ServicesMixin, FilesMixin
       switch (type) {
         case 'moonraker': {
           const state = (device.status === 'on') ? 'off' : 'on'
-          SocketActions.machineDevicePowerToggle(device.device, state)
+          SocketActions.machineDevicePowerSetDevice(device.device, state)
           break
         }
 
